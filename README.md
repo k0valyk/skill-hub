@@ -1,0 +1,172 @@
+# Skill Hub
+
+Локальна бібліотека скілів, плагінів, агентів і MCP-серверів для OpenCode — з аналізом GitHub-посилань, підключенням у один клік і власним MCP-сервером, щоб агент бачив **короткі описи**, а повний текст читав лише за потреби.
+
+Windows-first десктоп: **Tauri 2 + Rust** (уся робота з диском, git, HTTP і секретами) та **React 19 + TypeScript + Vite + Tailwind 4 + Framer Motion + Lucide** (інтерфейс).
+
+---
+
+## Що вміє
+
+- **Додавання за посиланням** — репозиторій, папка, окремий файл, gist або awesome-список. Спочатку **попередній перегляд**: що це, три речення (що / робить / навіщо), теги, ліцензія, зірки, розмір, ризики. Нічого не завантажується без підтвердження.
+- **Класифікація** — правила за вмістом (SKILL.md, `opencode.json`, `agent/`, `command/`, MCP-маніфести, промпти, теми) + евристики за README, назвою й тегами GitHub.
+- **Аналіз** — правила локально; якщо є ключ DeepSeek — 3-реченнєвий опис українською та англійською, кеш за версією промпта й комітом, лічильник токенів.
+- **Безпека** — сканер підозрілих патернів (`curl | sh`, `eval`, читання `~/.ssh`, `process.env` + мережа, небезпечні postinstall), рівні `clean → high` і попередження в прев'ю.
+- **Бібліотека** — сітка/список, пошук, фільтри за типом, обране, оцінки, нотатки, теги, дублікати, статистика, бюджет контексту.
+- **Підключення до OpenCode** — junction-посилання `.opencode/skills/<id>` глобально або в конкретному проєкті; вимкнення прибирає лінк, файли в бібліотеці лишаються.
+- **MCP-сервер `skillhub`** — `search_skills`, `get_skill`, `recommend`, `enable_skill`, `disable_skill`, `list_enabled`; ліниве завантаження й бюджет контексту.
+- **GitHub** — вхід через Device Flow або personal access token, публікація проєктів з приватним режимом за замовчуванням, перевірка секретів і підтвердженням публічного пушу, синхронізація, бекап бібліотеки.
+- **Профілі** — набори скілів під тип роботи, вмикаються одним кліком.
+- **Оновлення** — перевірка нових комітів, ручне оновлення елемента, фонова перевірка раз на добу.
+- **Інтерфейс** — темна графітова тема за замовчуванням, світла опція, один акцентний градієнт (6 пресетів), скляний сайдбар, `Ctrl+K`, повага до `prefers-reduced-motion`, українська за замовчуванням з перемикачем на English.
+
+---
+
+## Запуск
+
+Потрібні: **Node 20+**, **Rust 1.77+ (MSVC)**, **WebView2**, **git**.
+
+```powershell
+npm.cmd install
+npm.cmd run tauri dev        # десктоп у режимі розробки
+npm.cmd run tauri build      # інсталятори в src-tauri/target/release/bundle
+npm.cmd run stage:cli        # зібрати CLI окремо (tauri build робить це сам)
+```
+
+Лише інтерфейс у браузері (без Tauri, на mock-даних):
+
+```powershell
+npm.cmd run dev
+```
+
+Тести:
+
+```powershell
+npm.cmd test                                        # vitest: фільтри, сортування, формат
+cargo test --manifest-path src-tauri/Cargo.toml     # Rust: правила, сортування, лікування, MCP
+```
+
+CLI збирається окремим біном:
+
+```powershell
+cargo build --manifest-path src-tauri/Cargo.toml --bin skillhub-cli
+# src-tauri/target/debug/skillhub-cli.exe
+```
+
+---
+
+## CLI
+
+```text
+skillhub-cli [--root ПАПКА] <команда>
+
+init                          створити структуру бібліотеки та просканувати
+list [--json]                 список елементів
+search <запит>                пошук по бібліотеці
+enable <id> [--project ПАПКА] підключити до OpenCode
+disable <id> [--project ПАПКА] відключити
+budget                        бюджет контексту
+connect [--project ПАПКА]     прописати MCP-сервер в opencode.json
+check-updates                 перевірити нові коміти джерел
+mcp                           запустити MCP-сервер (stdio)
+version | --help
+```
+
+Приклад:
+
+```powershell
+skillhub-cli --root "$HOME\Documents\SkillHub" init
+skillhub-cli --root "$HOME\Documents\SkillHub" search telegram
+skillhub-cli --root "$HOME\Documents\SkillHub" enable telegram-bot-kit
+```
+
+Кнопка **«Підключити до OpenCode»** сама копіює CLI у `<root>/.skillhub/bin/skillhub-cli.exe` і прописує шлях у конфіг — окремо збирати нічого не треба. Під час `tauri build` CLI збирається й пакується поруч із застосунком (`bundle.externalBin`), тому інсталятор працює «з коробки».
+
+---
+
+## MCP в OpenCode
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "skillhub": {
+        "type": "local",
+        "command": ["C:\\Users\\you\\Documents\\SkillHub\\.skillhub\\bin\\skillhub-cli.exe", "mcp"],
+        "cwd": "~",
+        "pool": true
+      }
+    }
+  }
+}
+```
+
+Саме такий запис додає кнопка «Підключити до OpenCode» у глобальний `~/.config/opencode/opencode.json` (або в `.opencode/opencode.json` проєкту). CLI бере корінь бібліотеки зі своїх налаштувань; якщо потрібен інший каталог — додай `"--root", "D:\\Skills"` у `command`.
+
+Інструменти сервера:
+
+| Інструмент | Призначення |
+| --- | --- |
+| `search_skills` | Пошук за темою/мовою/задачею; повертає id, назву, тип, одне речення, орієнтовні токени |
+| `get_skill` | Повний текст скіла за id — лише коли справді потрібен |
+| `recommend` | 3–5 скілів під описане завдання без завантаження тексту |
+| `enable_skill` | Підключити глобально або в проєкті |
+| `disable_skill` | Відключити, залишивши в бібліотеці |
+| `list_enabled` | Що підключено і скільки це коштує в контексті |
+
+Бюджет = сума описів увімкнених скілів + 14 токенів на кожен скіл (назва, тип і роздільники). Саме стільки OpenCode бачить у контексті; повний текст — «на вимогу».
+
+---
+
+## Структура бібліотеки
+
+```text
+Documents/SkillHub/
+├─ library/
+│  ├─ skills/  plugins/  agents/  commands/
+│  ├─ token-savers/  mcp/  prompts/  themes/  other/
+├─ projects/                 # локальні проєкти для публікації
+├─ backups/                  # zip-бекапи
+└─ .skillhub/
+   ├─ skillhub.db            # метадані (SQLite)
+   ├─ bin/skillhub-cli.exe   # CLI для MCP
+   └─ cache/                 # тимчасові клони
+```
+
+Кожен елемент має `skillhub.json` з id, типом, джерелом, комітом, описами, тегами, ризиком і станом. Каталог можна змінити в **Налаштування → Коренева папка**.
+
+---
+
+## Налаштування
+
+- **Корінь бібліотеки** — будь-яка папка; за замовчуванням `Documents/SkillHub`.
+- **DeepSeek** — ключ зберігається у Windows Credential Manager (сервіс `SkillHub`). Без ключа описи генеруються правилами.
+- **GitHub** — OAuth App з увімкненим **Device Flow**: встав `Client ID` у налаштуваннях і натисни «Увійти через GitHub». Альтернатива — personal access token зі scope `repo`.
+- **Ліміт контексту** — повзунок у налаштуваннях; смуга бюджету показує, скільки описів уже зайнято.
+
+Змінні середовища для тестів і CI:
+
+| Змінна | Дія |
+| --- | --- |
+| `SKILLHUB_CONFIG_DIR` | Куди писати `settings.json` |
+| `SKILLHUB_OPENCODE_DIR` | Який `opencode`-конфіг вважати глобальним |
+| `SKILLHUB_GITHUB_TOKEN` | Перекриває токен із Credential Manager |
+| `DEEPSEEK_API_KEY` | Перекриває ключ DeepSeek |
+
+---
+
+## Безпека
+
+- Токени й ключі не потрапляють у фронтенд: усе живе в Rust і системному сховищі.
+- Завантаження — лише після прев'ю; публічний пуш неможливий без явного підтвердження.
+- Перед пушем проєкт сканується на схожі на секрети рядки; можна зупинитись або підтвердити вручну.
+- Видалення елемента з диска — окремий чекбокс; за замовчуванням файли лишаються.
+
+---
+
+## Стан проєкту
+
+Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` і `cargo test`. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
+
+Що потрібно налаштувати вручну: `GitHub OAuth Client ID` (для Device Flow) і ключ DeepSeek (для AI-описів). Усе інше працює локально без мережі, окрім GitHub-джерел і стрічки відкриттів.
