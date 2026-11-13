@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Базові дозволи головного вікна Skill Hub",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
