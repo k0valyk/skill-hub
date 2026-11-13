@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "icons": "node scripts/gen-icons.mjs",
-    "stage:cli": "cargo build --manifest-path src-tauri/Cargo.toml --release --bin skillhub-cli && node scripts/stage-cli.mjs"
+    "stage:cli": "cargo build --manifest-path src-tauri/Cargo.toml --release -p skillhub-cli && node scripts/stage-cli.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

@@ -10,13 +10,12 @@ rust-version = "1.77"
 name = "skillhub_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[workspace]
+members = ["cli"]
+
 [[bin]]
 name = "skillhub"
 path = "src/main.rs"
-
-[[bin]]
-name = "skillhub-cli"
-path = "src/bin/skillhub_cli.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

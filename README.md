@@ -46,10 +46,10 @@ npm.cmd test                                        # vitest: фільтри, с
 cargo test --manifest-path src-tauri/Cargo.toml     # Rust: правила, сортування, лікування, MCP
 ```
 
-CLI збирається окремим біном:
+CLI живе в окремому крейті `skillhub-cli` (workspace поруч із GUI) і використовує ту саму бібліотеку:
 
 ```powershell
-cargo build --manifest-path src-tauri/Cargo.toml --bin skillhub-cli
+cargo build --manifest-path src-tauri/Cargo.toml -p skillhub-cli
 # src-tauri/target/debug/skillhub-cli.exe
 ```
 

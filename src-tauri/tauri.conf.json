@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "dev.skillhub.app",
   "build": {
-    "beforeDevCommand": "cargo build --manifest-path src-tauri/Cargo.toml --bin skillhub-cli && node scripts/stage-cli.mjs --debug && npm run dev",
+    "beforeDevCommand": "cargo build --manifest-path src-tauri/Cargo.toml -p skillhub-cli && node scripts/stage-cli.mjs --debug && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build && cargo build --manifest-path src-tauri/Cargo.toml --release --bin skillhub-cli && node scripts/stage-cli.mjs",
+    "beforeBuildCommand": "npm run build && cargo build --manifest-path src-tauri/Cargo.toml --release -p skillhub-cli && node scripts/stage-cli.mjs",
     "frontendDist": "../dist"
   },
   "app": {

@@ -1,0 +1,16 @@
+[package]
+name = "skillhub-cli"
+version = "0.1.0"
+description = "Консольний та MCP-інтерфейс Skill Hub"
+edition = "2021"
+rust-version = "1.77"
+
+[[bin]]
+name = "skillhub-cli"
+path = "src/main.rs"
+
+[dependencies]
+skillhub = { path = ".." }
+anyhow = "1"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }

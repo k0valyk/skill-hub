@@ -1,24 +1,23 @@
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 
-use skillhub_lib::{
-    db::Db, linking, library_ops, mcp, scanner, settings, util, commands,
-};
+use skillhub_lib::{commands, db::Db, library_ops, linking, mcp, scanner, settings, util};
 
 fn print_help() {
     println!(
         "Skill Hub CLI 0.1.0\n\n\
 Використання: skillhub-cli [--root ПАПКА] <команда>\n\n\
 Команди:\n\
-  init                         створити структуру бібліотеки та просканувати\n\
-  list [--json]                список елементів\n\
-  search <запит>               пошук по бібліотеці\n\
+  init                          створити структуру бібліотеки та просканувати\n\
+  list [--json]                 список елементів\n\
+  search <запит>                пошук по бібліотеці\n\
   enable <id> [--project ПАПКА]  підключити до OpenCode\n\
   disable <id> [--project ПАПКА] відключити\n\
-  budget                       бюджет контексту\n\
-  connect [--project ПАПКА]    прописати MCP-сервер в opencode.json\n\
-  mcp                          запустити MCP-сервер (stdio) для OpenCode\n\
-  version                      версія\n"
+  budget                        бюджет контексту\n\
+  connect [--project ПАПКА]     прописати MCP-сервер в opencode.json\n\
+  check-updates                 перевірити нові коміти джерел\n\
+  mcp                           запустити MCP-сервер (stdio) для OpenCode\n\
+  version                       версія\n"
     );
 }
 

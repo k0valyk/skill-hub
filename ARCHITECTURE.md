@@ -35,7 +35,7 @@
 | `skillhub` | GUI (Tauri): вікно, трей, фонова перевірка оновлень |
 | `skillhub-cli` | Консоль: `init/list/search/enable/disable/budget/connect/check-updates` + MCP stdio |
 
-CLI — не окремий крейт: він використовує ту саму `skillhub_lib`, тому логіка підключення й сканування однакова для GUI, CLI і MCP. GUI копіює власний CLI у `<root>/.skillhub/bin/` під час «Connect», щоб не залежати від порядку збірки Tauri.
+CLI — окремий крейт `src-tauri/cli` у тому самому Cargo workspace: він залежить від тієї ж `skillhub_lib`, тому логіка підключення й сканування однакова для GUI, CLI і MCP. Окремий крейт ще й не дає Tauri-бандлеру вважати CLI другим `[[bin]]` GUI (інакше MSI додає sidecar двічі). GUI копіює CLI у `<root>/.skillhub/bin/` під час «Connect», щоб не залежати від порядку збірки Tauri.
 
 ---
 
@@ -237,7 +237,7 @@ src/
 | Рішення | Чому |
 | --- | --- |
 | Tauri замість Electron | Менший розмір, RAM і швидший старт; WebView2 уже є в Windows |
-| Один крейт, два бінарники | Спільна логіка GUI/CLI/MCP без дублювання |
+| Workspace: GUI + окремий крейт CLI | Спільна логіка GUI/CLI/MCP без дублювання і без подвійного sidecar у MSI |
 | MCP вручну (JSON-RPC по рядках) | Мінімум залежностей, повний контроль над лінивим завантаженням |
 | Junction замість копіювання | Оновлення в бібліотеці одразу видно OpenCode; fallback — копія |
 | `skillhub.json` + SQLite | Бібліотека переносима й відновлювана; БД лише індекс і кеш |
