@@ -1,4 +1,5 @@
 pub mod analyze;
+pub mod agents;
 pub mod classify;
 pub mod commands;
 pub mod db;
@@ -148,6 +149,23 @@ pub fn run() {
             commands::open_path,
             commands::open_url,
             commands::opencode_profile_preview,
+            commands::agents_list,
+            commands::agent_tasks,
+            commands::agent_create,
+            commands::agent_update,
+            commands::agent_toggle,
+            commands::agent_delete,
+            commands::agent_link_project,
+            commands::agent_unlink_project,
+            commands::agent_link_skill,
+            commands::agent_unlink_skill,
+            commands::agent_choose_icon,
+            commands::agent_templates,
+            commands::agent_export,
+            commands::agent_import,
+            commands::agent_run_task,
+            commands::agent_cancel_task,
+            commands::agents_runtime,
         ])
         .run(tauri::generate_context!())
         .expect("Skill Hub не зміг запуститися");

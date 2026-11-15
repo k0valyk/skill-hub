@@ -117,8 +117,45 @@ impl Db {
                 payload TEXT NOT NULL,
                 fetched_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS agents_meta (
+                path TEXT PRIMARY KEY,
+                display_name TEXT DEFAULT '',
+                icon TEXT DEFAULT '',
+                tags TEXT DEFAULT '[]',
+                auto_approve INTEGER DEFAULT 0,
+                updated_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS agent_projects (
+                agent_id TEXT NOT NULL,
+                project_path TEXT NOT NULL,
+                created_at TEXT,
+                PRIMARY KEY (agent_id, project_path)
+            );
+            CREATE TABLE IF NOT EXISTS agent_skills (
+                agent_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                created_at TEXT,
+                PRIMARY KEY (agent_id, item_id)
+            );
+            CREATE TABLE IF NOT EXISTS agent_tasks (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                agent_name TEXT DEFAULT '',
+                project_path TEXT DEFAULT '',
+                prompt TEXT NOT NULL,
+                status TEXT NOT NULL,
+                output TEXT DEFAULT '',
+                started_at TEXT,
+                finished_at TEXT,
+                duration_ms INTEGER DEFAULT 0,
+                tokens_in INTEGER DEFAULT 0,
+                tokens_out INTEGER DEFAULT 0,
+                cost_usd REAL DEFAULT 0,
+                exit_code INTEGER
+            );
             CREATE INDEX IF NOT EXISTS idx_items_kind ON items(kind);
             CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage_events(ts);
+            CREATE INDEX IF NOT EXISTS idx_agent_tasks_agent ON agent_tasks(agent_id, started_at);
             "#,
         )?;
         Ok(())

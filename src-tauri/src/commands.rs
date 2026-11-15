@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::db::Db;
 use crate::domain::{Budget, DuplicateGroup, Item, Kind, Preview, Profile, ProjectInfo, RepoMeta, Stats};
+use crate::agents::{Agent, AgentCreateInput, AgentPatch, AgentTask, AgentTemplate, RunningInfo};
 use crate::library_ops::{UpdateInfo, UpdateResult};
 use crate::settings::{SecretStatus, Settings};
 
@@ -15,6 +16,8 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub pending: Mutex<HashMap<String, RepoMeta>>,
     pub startup_error: Mutex<Option<String>>,
+    pub running: Arc<Mutex<HashMap<String, crate::agents::RunningInfo>>>,
+    pub task_handles: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
 }
 
 impl AppState {
@@ -50,6 +53,8 @@ impl AppState {
             http,
             pending: Mutex::new(HashMap::new()),
             startup_error: Mutex::new(startup_error),
+            running: Arc::new(Mutex::new(HashMap::new())),
+            task_handles: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -1066,6 +1071,554 @@ pub async fn backup_library(
     let _ = crate::settings::save(&settings);
     *state.settings.lock().unwrap() = settings;
     Ok(url)
+}
+
+// ---------- агенти ----------
+
+#[tauri::command]
+pub async fn agents_list(state: tauri::State<'_, AppState>) -> Result<Vec<Agent>, String> {
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    Ok(crate::agents::list(&db, &running))
+}
+
+#[tauri::command]
+pub async fn agent_tasks(
+    id: String,
+    limit: Option<i64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<AgentTask>, String> {
+    let db = state.db.lock().unwrap();
+    Ok(crate::agents::tasks(&db, &id, limit.unwrap_or(20)))
+}
+
+#[tauri::command]
+pub async fn agent_create(
+    input: AgentCreateInput,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let root = state.root();
+    let db = state.db.lock().unwrap();
+    crate::agents::create(&db, &root, input).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_update(
+    id: String,
+    patch: AgentPatch,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    crate::agents::update(&db, &running, &id, patch).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_toggle(
+    id: String,
+    enabled: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let db = state.db.lock().unwrap();
+    crate::agents::set_enabled(&db, &id, enabled).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_delete(
+    id: String,
+    confirm: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<Agent>, String> {
+    let db = state.db.lock().unwrap();
+    crate::agents::remove(&db, &id, confirm).map_err(|e| humanize(&e))?;
+    let running = state.running.lock().unwrap();
+    Ok(crate::agents::list(&db, &running))
+}
+
+#[tauri::command]
+pub async fn agent_link_project(
+    id: String,
+    path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    crate::agents::link_project(&db, &running, &id, &path).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_unlink_project(
+    id: String,
+    path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    crate::agents::unlink_project(&db, &running, &id, &path).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_link_skill(
+    id: String,
+    item_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    crate::agents::link_skill(&db, &running, &id, &item_id).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_unlink_skill(
+    id: String,
+    item_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Agent, String> {
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    crate::agents::unlink_skill(&db, &running, &id, &item_id).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_choose_icon(
+    id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<Agent>, String> {
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .add_filter("Зображення", &["png", "jpg", "jpeg", "webp", "gif", "svg"])
+        .pick_file()
+        .await
+    else {
+        return Ok(None);
+    };
+    let root = state.root();
+    let db = state.db.lock().unwrap();
+    let running = state.running.lock().unwrap();
+    crate::agents::set_icon_from_file(&db, &running, &root, &id, file.path())
+        .map(Some)
+        .map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_templates() -> Result<Vec<AgentTemplate>, String> {
+    Ok(crate::agents::templates())
+}
+
+#[tauri::command]
+pub async fn agent_export(
+    id: String,
+    dest: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let agent = {
+        let db = state.db.lock().unwrap();
+        crate::agents::get(&db, &std::collections::HashMap::new(), &id)
+            .map_err(|e| humanize(&e))?
+    };
+    let target = match dest {
+        Some(path) if !path.trim().is_empty() => PathBuf::from(path),
+        _ => {
+            let file = rfd::AsyncFileDialog::new()
+                .set_file_name(format!("{}.md", agent.tech_name))
+                .add_filter("OpenCode agent", &["md"])
+                .save_file()
+                .await
+                .ok_or_else(|| "Експорт скасовано".to_string())?;
+            file.path().to_path_buf()
+        }
+    };
+    let db = state.db.lock().unwrap();
+    crate::agents::export_to(&db, &id, &target).map_err(|e| humanize(&e))
+}
+
+#[tauri::command]
+pub async fn agent_import(
+    scope: Option<String>,
+    project: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<Agent>, String> {
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .add_filter("OpenCode agent", &["md"])
+        .pick_file()
+        .await
+    else {
+        return Ok(None);
+    };
+    let scope = scope.unwrap_or_else(|| "global".into());
+    let db = state.db.lock().unwrap();
+    let agent = crate::agents::import_from(&db, file.path(), &scope, project.as_deref())
+        .map_err(|e| humanize(&e))?;
+    Ok(Some(agent))
+}
+
+#[tauri::command]
+pub async fn agents_runtime() -> Result<Option<String>, String> {
+    Ok(crate::agents::opencode_cli().map(|path| path.to_string_lossy().to_string()))
+}
+
+fn finalize_agent_task(
+    db: &Arc<Mutex<Db>>,
+    running: &Arc<Mutex<HashMap<String, RunningInfo>>>,
+    handles: &Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+    app: &tauri::AppHandle,
+    agent_id: &str,
+    task_id: &str,
+    status: &str,
+    output: &str,
+    started: std::time::Instant,
+    tokens_in: i64,
+    tokens_out: i64,
+    cost_usd: f64,
+    exit_code: Option<i64>,
+) {
+    use tauri::Emitter;
+    let duration = started.elapsed().as_millis() as i64;
+    if let Ok(handle) = db.lock() {
+        let _ = crate::agents::finish_task(
+            &handle, task_id, status, output, duration, tokens_in, tokens_out, cost_usd, exit_code,
+        );
+    }
+    if let Ok(mut map) = running.lock() {
+        map.remove(agent_id);
+    }
+    if let Ok(mut map) = handles.lock() {
+        map.remove(agent_id);
+    }
+    let _ = app.emit(
+        "agent:finished",
+        serde_json::json!({
+            "agentId": agent_id,
+            "taskId": task_id,
+            "status": status,
+            "exitCode": exit_code,
+            "durationMs": duration,
+            "tokensIn": tokens_in,
+            "tokensOut": tokens_out,
+            "costUsd": cost_usd
+        }),
+    );
+}
+
+fn opencode_command(cli: &std::path::Path) -> tokio::process::Command {
+    #[cfg(windows)]
+    {
+        let ext = cli
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .unwrap_or_default();
+        if ext == "cmd" || ext == "bat" {
+            let mut command = tokio::process::Command::new("cmd");
+            command.arg("/C").arg(cli);
+            return command;
+        }
+    }
+    tokio::process::Command::new(cli)
+}
+
+#[tauri::command]
+pub async fn agent_run_task(
+    id: String,
+    prompt: String,
+    project: Option<String>,
+    auto_approve: Option<bool>,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<AgentTask, String> {
+    use tauri::Emitter;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let prompt = prompt.trim().to_string();
+    if prompt.is_empty() {
+        return Err("Напиши завдання для агента.".into());
+    }
+    let (agent, auto) = {
+        let db = state.db.lock().unwrap();
+        let running = state.running.lock().unwrap();
+        let agent = crate::agents::get(&db, &running, &id).map_err(|e| humanize(&e))?;
+        if !agent.enabled {
+            return Err("Агент вимкнений. Увімкни його перед запуском.".into());
+        }
+        if running.contains_key(&id) {
+            return Err("Цей агент уже виконує завдання.".into());
+        }
+        let auto = auto_approve.unwrap_or(agent.auto_approve);
+        (agent, auto)
+    };
+    let cli = crate::agents::opencode_cli().ok_or_else(|| {
+        "OpenCode CLI не знайдено. Увімкни OpenCode Desktop або задай SKILLHUB_OPENCODE_CLI."
+            .to_string()
+    })?;
+    let cwd = match project.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            if !path.is_dir() {
+                return Err(format!("Папка проєкту не знайдена: {}", path.display()));
+            }
+            path
+        }
+        None => agent
+            .project_path
+            .as_ref()
+            .map(PathBuf::from)
+            .filter(|path| path.is_dir())
+            .or_else(|| {
+                std::env::var("USERPROFILE")
+                    .or_else(|_| std::env::var("HOME"))
+                    .ok()
+                    .map(PathBuf::from)
+            })
+            .unwrap_or_else(|| PathBuf::from(".")),
+    };
+    let started_at = crate::util::now_iso();
+    let task = AgentTask {
+        id: format!("task-{}", uuid::Uuid::new_v4()),
+        agent_id: id.clone(),
+        agent_name: agent.name.clone(),
+        project_path: cwd.to_string_lossy().to_string(),
+        prompt: prompt.clone(),
+        status: "running".into(),
+        output: String::new(),
+        started_at: started_at.clone(),
+        finished_at: None,
+        duration_ms: 0,
+        tokens_in: 0,
+        tokens_out: 0,
+        cost_usd: 0.0,
+        exit_code: None,
+    };
+    {
+        let db = state.db.lock().unwrap();
+        crate::agents::insert_task(&db, &task).map_err(|e| humanize(&e))?;
+    }
+    if let Ok(mut map) = state.running.lock() {
+        map.insert(
+            id.clone(),
+            RunningInfo {
+                task_id: task.id.clone(),
+                activity: Some("Запуск…".into()),
+                waiting: false,
+                started_at: started_at.clone(),
+            },
+        );
+    }
+    let _ = app.emit(
+        "agent:activity",
+        serde_json::json!({
+            "agentId": &id,
+            "taskId": &task.id,
+            "activity": "Запуск…",
+            "waiting": false
+        }),
+    );
+
+    let db = state.db.clone();
+    let running = state.running.clone();
+    let handles = state.task_handles.clone();
+    let app_handle = app.clone();
+    let agent_id = id.clone();
+    let task_id = task.id.clone();
+    let agent_key = agent.key.clone();
+    let task_prompt = prompt.clone();
+    let cwd_clone = cwd.clone();
+    let cli_clone = cli.clone();
+
+    let handle = tokio::spawn(async move {
+        let started = std::time::Instant::now();
+        let mut command = opencode_command(&cli_clone);
+        command
+            .arg("run")
+            .arg("--agent")
+            .arg(&agent_key)
+            .arg("--format")
+            .arg("json")
+            .arg("--title")
+            .arg(format!("Skill Hub · {agent_key}"));
+        if auto {
+            command.arg("--auto");
+        }
+        command
+            .arg(&task_prompt)
+            .current_dir(&cwd_clone)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                finalize_agent_task(
+                    &db,
+                    &running,
+                    &handles,
+                    &app_handle,
+                    &agent_id,
+                    &task_id,
+                    "error",
+                    &format!("Не вдалося запустити OpenCode: {error}"),
+                    started,
+                    0,
+                    0,
+                    0.0,
+                    None,
+                );
+                return;
+            }
+        };
+        let Some(stdout) = child.stdout.take() else {
+            finalize_agent_task(&db, &running, &handles, &app_handle, &agent_id, &task_id, "error", "Немає stdout", started, 0, 0, 0.0, None);
+            return;
+        };
+        let Some(stderr) = child.stderr.take() else {
+            finalize_agent_task(&db, &running, &handles, &app_handle, &agent_id, &task_id, "error", "Немає stderr", started, 0, 0, 0.0, None);
+            return;
+        };
+        let mut out_lines = BufReader::new(stdout).lines();
+        let mut err_lines = BufReader::new(stderr).lines();
+        let mut out_open = true;
+        let mut err_open = true;
+        let mut output = String::new();
+        let mut activity = String::from("Працює…");
+        let mut waiting = false;
+        let mut tokens_in = 0i64;
+        let mut tokens_out = 0i64;
+        let mut cost = 0.0f64;
+
+        while out_open || err_open {
+            tokio::select! {
+                line = out_lines.next_line(), if out_open => {
+                    match line {
+                        Ok(Some(line)) => {
+                            let event = crate::agents::parse_event(&line);
+                            if let Some(text) = event.text {
+                                if !text.trim().is_empty() {
+                                    if !output.is_empty() {
+                                        output.push('\n');
+                                    }
+                                    output.push_str(&text);
+                                    if output.len() > 200_000 {
+                                        output = output.chars().take(200_000).collect();
+                                    }
+                                }
+                            }
+                            tokens_in += event.tokens_in;
+                            tokens_out += event.tokens_out;
+                            cost += event.cost;
+                            if let Some(next) = event.activity.filter(|value| !value.is_empty()) {
+                                activity = next;
+                            }
+                            if event.waiting {
+                                waiting = true;
+                            }
+                            if let Ok(mut map) = running.lock() {
+                                if let Some(info) = map.get_mut(&agent_id) {
+                                    info.activity = Some(activity.clone());
+                                    info.waiting = waiting;
+                                }
+                            }
+                            let _ = app_handle.emit(
+                                "agent:activity",
+                                serde_json::json!({
+                                    "agentId": &agent_id,
+                                    "taskId": &task_id,
+                                    "activity": &activity,
+                                    "waiting": waiting
+                                }),
+                            );
+                        }
+                        Ok(None) => out_open = false,
+                        Err(_) => out_open = false,
+                    }
+                }
+                line = err_lines.next_line(), if err_open => {
+                    match line {
+                        Ok(Some(line)) => {
+                            let line = line.trim();
+                            if !line.is_empty() {
+                                if !output.is_empty() {
+                                    output.push('\n');
+                                }
+                                output.push_str(line);
+                                if output.len() > 200_000 {
+                                    output = output.chars().take(200_000).collect();
+                                }
+                                activity = line.chars().take(160).collect();
+                                let _ = app_handle.emit(
+                                    "agent:activity",
+                                    serde_json::json!({
+                                        "agentId": &agent_id,
+                                        "taskId": &task_id,
+                                        "activity": &activity,
+                                        "waiting": waiting
+                                    }),
+                                );
+                            }
+                        }
+                        Ok(None) => err_open = false,
+                        Err(_) => err_open = false,
+                    }
+                }
+            }
+        }
+
+        let status = child.wait().await;
+        let exit_code = status.as_ref().ok().and_then(|status| status.code()).map(i64::from);
+        let status_text = if exit_code == Some(0) { "ok" } else { "error" };
+        finalize_agent_task(
+            &db,
+            &running,
+            &handles,
+            &app_handle,
+            &agent_id,
+            &task_id,
+            status_text,
+            &output,
+            started,
+            tokens_in,
+            tokens_out,
+            cost,
+            exit_code,
+        );
+    });
+    if let Ok(mut map) = state.task_handles.lock() {
+        map.insert(id, handle);
+    }
+    Ok(task)
+}
+
+#[tauri::command]
+pub async fn agent_cancel_task(
+    id: String,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    let info = state.running.lock().unwrap().remove(&id);
+    if let Some(info) = info {
+        if let Some(handle) = state.task_handles.lock().unwrap().remove(&id) {
+            handle.abort();
+        }
+        let duration = chrono::DateTime::parse_from_rfc3339(&info.started_at)
+            .map(|started| chrono::Utc::now().signed_duration_since(started.with_timezone(&chrono::Utc)).num_milliseconds())
+            .unwrap_or(0);
+        if let Ok(db) = state.db.lock() {
+            let _ = crate::agents::cancel_task(&db, &info.task_id, duration);
+        }
+        let _ = app.emit(
+            "agent:finished",
+            serde_json::json!({
+                "agentId": id,
+                "taskId": info.task_id,
+                "status": "cancelled",
+                "exitCode": null,
+                "durationMs": duration,
+                "tokensIn": 0,
+                "tokensOut": 0,
+                "costUsd": 0
+            }),
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]
