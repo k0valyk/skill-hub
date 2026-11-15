@@ -332,7 +332,23 @@ fn prettify(key: &str) -> String {
     }
 }
 
+/// Українські назви для штатних агентів QA-циклу (доки користувач не задав свою).
+fn default_display(key: &str) -> Option<&'static str> {
+    match key.rsplit('/').next().unwrap_or(key) {
+        "qa-tester" => Some("Тестувальник"),
+        "fixer" => Some("Виправляч"),
+        "auditor" => Some("Аудитор"),
+        _ => None,
+    }
+}
+
 pub fn default_icon(seed: &str) -> String {
+    match seed.rsplit('/').next().unwrap_or(seed) {
+        "qa-tester" => return "🧪|#ffb86b".into(),
+        "fixer" => return "🛠️|#43e97b".into(),
+        "auditor" => return "🔍|#5b8cff".into(),
+        _ => {}
+    }
     let hash = sha256_hex(seed.as_bytes());
     let value = u32::from_str_radix(&hash[..8], 16).unwrap_or(0);
     let emoji = EMOJIS[(value as usize) % EMOJIS.len()];
@@ -474,7 +490,13 @@ fn agent_from_file(
         file_name,
         scope: scope.to_string(),
         project_path,
-        name: if display.trim().is_empty() { prettify(key) } else { display },
+        name: if display.trim().is_empty() {
+            default_display(key)
+                .map(str::to_string)
+                .unwrap_or_else(|| prettify(key))
+        } else {
+            display
+        },
         tech_name,
         description: parsed.description,
         icon: if icon.trim().is_empty() { default_icon(key) } else { icon },
@@ -1463,6 +1485,17 @@ mod tests {
         let second = default_icon("g:agent-factory");
         assert_eq!(first, second);
         assert!(first.contains('|'));
+    }
+
+    #[test]
+    fn qa_team_has_ukrainian_names_and_icons() {
+        assert_eq!(default_display("qa-tester"), Some("Тестувальник"));
+        assert_eq!(default_display("fixer"), Some("Виправляч"));
+        assert_eq!(default_display("auditor"), Some("Аудитор"));
+        assert!(default_icon("auditor").starts_with("🔍|"));
+        assert!(default_icon("qa-tester").starts_with("🧪|"));
+        assert!(default_icon("fixer").starts_with("🛠️|"));
+        assert_eq!(prettify("my-agent"), "My agent");
     }
 
     #[test]

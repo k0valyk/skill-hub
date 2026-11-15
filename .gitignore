@@ -9,6 +9,9 @@ src-tauri/binaries
 *.log
 *.tsbuildinfo
 reports/ui/
+reports/manual/
 reports/qa-report.json
 reports/fix-report.md
+reports/audit-report.json
+reports/audit-report.md
 .codegraph/

@@ -586,6 +586,11 @@ export const useApp = create<AppStore>((set, get) => {
             /* налаштування підтягнуться при наступному запуску */
           }
           say("settings.deviceSuccess");
+        } else if (result.state === "expired" || result.state === "denied" || result.state === "error") {
+          // Код більше не дійсний — прибираємо його з UI, щоб не показувати мертвий код.
+          stopDeviceTimer();
+          set({ device: null, deviceWaiting: false });
+          say("settings.deviceError", undefined, "error");
         }
         return result;
       } catch (error) {

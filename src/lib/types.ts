@@ -398,3 +398,15 @@ export interface QaReportSummary {
   openLow: number;
   generatedAt?: string | null;
 }
+
+export interface AuditReportSummary {
+  path: string;
+  exists: boolean;
+  verdict: "pass" | "warn" | "fail" | "missing";
+  verified: number;
+  partial: number;
+  falseFixes: number;
+  testsOk: boolean;
+  agentsFail: number;
+  generatedAt?: string | null;
+}

@@ -169,8 +169,8 @@ Discovery:
 
 ### QA-цикл
 
-- Глобальні агенти `qa-tester` і `fixer` (Markdown у `~/.config/opencode/agents`) працюють із папкою `reports/` проєкту. `qa-report.json` має фіксовану схему; `fixer` змінює `status/fixSummary/files`.
-- Кнопка **QA цикл** (`AgentQaCycle`) запускає `qa-tester` → читає звіт (`agent_qa_report`) → запускає `fixer` → повторює до 5 кругів, поки є critical/high. Події завдань уже дають живий статус, логи, токени й вартість; кнопка зупинки скасовує поточного агента.
+- Глобальні агенти `qa-tester`, `fixer` і `auditor` (Markdown у `~/.config/opencode/agents`) працюють із папкою `reports/` проєкту. `qa-report.json` має фіксовану схему; `fixer` змінює `status/fixSummary/files`; `auditor` перевіряє докази й пише `audit-report.json`.
+- Кнопка **QA цикл** (`AgentQaCycle`) запускає `qa-tester` → читає звіт (`agent_qa_report`) → запускає `fixer` → запускає `auditor` → читає вердикт (`agent_audit_report`) і повторює до 5 кругів, поки є critical/high або аудит не підтвердив якість. Події завдань уже дають живий статус, логи, токени й вартість; кнопка зупинки скасовує поточного агента.
 - `scripts/qa-ui.mjs` (Playwright + Edge) перевіряє браузерний mock-режим: вкладки, палітру (Ctrl+K, Escape, клік поза), агенти, голосовий ввід, QA-модалку, теми. Пише `reports/ui/ui-report.json` і скріншоти.
 
 ---

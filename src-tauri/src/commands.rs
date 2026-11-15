@@ -1835,6 +1835,91 @@ pub async fn agent_qa_report(project: String) -> Result<QaReportSummary, String>
     Ok(summary)
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditReportSummary {
+    pub path: String,
+    pub exists: bool,
+    pub verdict: String,
+    pub verified: i64,
+    pub partial: i64,
+    pub false_fixes: i64,
+    pub tests_ok: bool,
+    pub agents_fail: i64,
+    pub generated_at: Option<String>,
+}
+
+#[tauri::command]
+pub async fn agent_audit_report(project: String) -> Result<AuditReportSummary, String> {
+    let path = PathBuf::from(project).join("reports").join("audit-report.json");
+    let empty = |exists: bool| AuditReportSummary {
+        path: path.to_string_lossy().to_string(),
+        exists,
+        verdict: if exists { "warn".into() } else { "missing".into() },
+        verified: 0,
+        partial: 0,
+        false_fixes: 0,
+        tests_ok: false,
+        agents_fail: 0,
+        generated_at: None,
+    };
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(_) => return Ok(empty(false)),
+    };
+    let value: serde_json::Value =
+        serde_json::from_str(&text).map_err(|error| format!("Некоректний audit-report.json: {error}"))?;
+    let count = |node: Option<&serde_json::Value>, key: &str| -> i64 {
+        node.and_then(|node| node.get(key))
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
+    };
+    let summary = value.get("summary");
+    let tests = value.get("tests");
+    let tests_ok = tests
+        .map(|tests| {
+            tests
+                .as_object()
+                .map(|map| {
+                    map.values().all(|state| {
+                        matches!(state.as_str().unwrap_or("skipped"), "pass" | "skipped")
+                    })
+                })
+                .unwrap_or(false)
+        })
+        .unwrap_or(false);
+    let agents_fail = count(summary, "agentsFail").max(
+        value
+            .get("agents")
+            .and_then(|agents| agents.as_array())
+            .map(|agents| {
+                agents
+                    .iter()
+                    .filter(|agent| agent.get("verdict").and_then(|v| v.as_str()) == Some("fail"))
+                    .count() as i64
+            })
+            .unwrap_or(0),
+    );
+    Ok(AuditReportSummary {
+        path: path.to_string_lossy().to_string(),
+        exists: true,
+        verdict: value
+            .get("verdict")
+            .and_then(|value| value.as_str())
+            .unwrap_or("warn")
+            .to_ascii_lowercase(),
+        verified: count(summary, "verified"),
+        partial: count(summary, "partial"),
+        false_fixes: count(summary, "false"),
+        tests_ok,
+        agents_fail,
+        generated_at: value
+            .get("generatedAt")
+            .and_then(|value| value.as_str())
+            .map(str::to_string),
+    })
+}
+
 #[tauri::command]
 pub async fn choose_folder() -> Result<Option<String>, String> {
     Ok(rfd::AsyncFileDialog::new()

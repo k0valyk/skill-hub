@@ -294,6 +294,30 @@ mockAgents.push(
     bodyTokens: 580,
     autoApprove: true,
   },
+  {
+    ...mockAgents[0],
+    id: "g:auditor",
+    key: "auditor",
+    path: "C:\\Users\\demo\\.config\\opencode\\agents\\auditor.md",
+    fileName: "auditor.md",
+    name: "Аудитор",
+    techName: "auditor",
+    description: "Перевіряє роботу Тестувальника і Виправляча: звіряє звіт із кодом, запускає тести, виносить вердикт якості.",
+    icon: "🔍|#5b8cff",
+    mode: "primary",
+    tags: ["audit", "quality"],
+    skills: [],
+    projects: ["C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api"],
+    status: "idle",
+    activity: null,
+    lastRunAt: null,
+    lastStatus: null,
+    tokensIn: 0,
+    tokensOut: 0,
+    costUsd: 0,
+    bodyTokens: 620,
+    autoApprove: true,
+  },
 );
 
 const mockAgentTasks: AgentTask[] = [  {
@@ -908,6 +932,20 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
         openHigh: hasIssues ? 1 : 0,
         openMedium: hasIssues ? 2 : 0,
         openLow: 0,
+        generatedAt: new Date().toISOString(),
+      } as T;
+    }
+    case "agent_audit_report": {
+      await delay(400);
+      return {
+        path: `${String(args?.project ?? "")}\\reports\\audit-report.json`,
+        exists: true,
+        verdict: "pass",
+        verified: 3,
+        partial: 0,
+        falseFixes: 0,
+        testsOk: true,
+        agentsFail: 0,
         generatedAt: new Date().toISOString(),
       } as T;
     }

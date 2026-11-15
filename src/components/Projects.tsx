@@ -84,6 +84,12 @@ export function Projects() {
                   autoFocus
                   onChange={(event) => setNewName(event.target.value)}
                   onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setNewName("");
+                      setCreating(false);
+                      return;
+                    }
                     if (event.key === "Enter" && newName.trim()) {
                       void initProject(newName.trim());
                       setNewName("");

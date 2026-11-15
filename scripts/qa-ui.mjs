@@ -139,6 +139,24 @@ try {
       if (await qaTitle.isVisible().catch(() => false)) {
         steps.push("qa: cycle modal opened");
         await shot("06c-qa-cycle.png");
+        const startCycle = page.locator("button", { hasText: "Запустити цикл" }).first();
+        if (await startCycle.isVisible().catch(() => false)) {
+          await startCycle.click();
+          let verdict = false;
+          for (let i = 0; i < 40; i += 1) {
+            await page.waitForTimeout(500);
+            if ((await page.locator("body").innerText()).includes("Вердикт аудиту")) {
+              verdict = true;
+              break;
+            }
+          }
+          if (verdict) {
+            steps.push("qa: auditor verdict shown");
+            await shot("06d-qa-audit.png");
+          } else {
+            errors.push("QA cycle did not reach the auditor verdict");
+          }
+        }
       } else {
         errors.push("QA cycle modal did not open");
       }

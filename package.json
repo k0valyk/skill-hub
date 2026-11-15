@@ -11,6 +11,7 @@
     "test": "vitest run",
     "icons": "node scripts/gen-icons.mjs",
     "qa:ui": "node scripts/qa-ui.mjs",
+    "qa:deep": "node scripts/qa-deep.mjs",
     "stage:cli": "cargo build --manifest-path src-tauri/Cargo.toml --release -p skillhub-cli && node scripts/stage-cli.mjs"
   },
   "dependencies": {
