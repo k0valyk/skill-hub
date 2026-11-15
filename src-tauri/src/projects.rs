@@ -594,19 +594,20 @@ fn ensure_backup_repo(root: &Path) -> Result<PathBuf> {
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
-        // core.worktree рахується від батьківської теки git-каталогу, тому
-        // `../../library` вказував за межі бібліотеки. Абсолютний шлях надійніший.
-        let worktree = root.join("library");
-        std::fs::create_dir_all(&worktree)?;
-        let _ = run_git(
-            &backup_git,
-            ["config", "core.worktree", &worktree.to_string_lossy()],
-        );
-        let exclude = backup_git.join(".git").join("info").join("exclude");
-        std::fs::create_dir_all(exclude.parent().unwrap_or(&backup_git))?;
-        let _ = std::fs::write(exclude, "*.db\n*.tmp\n*.log\n");
         let _ = run_git(&backup_git, ["checkout", "-b", "main"]);
     }
+    // core.worktree рахується від батьківської теки git-каталогу, тому
+    // `../../library` вказував за межі бібліотеки. Абсолютний шлях надійніший.
+    // Ставимо його щоразу: бібліотеку могли перенести в іншу папку.
+    let worktree = root.join("library");
+    std::fs::create_dir_all(&worktree)?;
+    let _ = run_git(
+        &backup_git,
+        ["config", "core.worktree", &worktree.to_string_lossy()],
+    );
+    let exclude = backup_git.join(".git").join("info").join("exclude");
+    std::fs::create_dir_all(exclude.parent().unwrap_or(&backup_git))?;
+    let _ = std::fs::write(exclude, "*.db\n*.tmp\n*.log\n");
     Ok(backup_git)
 }
 
