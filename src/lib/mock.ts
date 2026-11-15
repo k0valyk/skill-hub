@@ -817,6 +817,8 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
       return ["en-US"] as T;
     case "voice_listen":
       return "Привіт, це тест голосового вводу" as T;
+    case "agent_install_qa_team":
+      return [] as unknown as T;
     case "agent_create": {
       const input = (args?.input ?? {}) as Record<string, unknown>;
       const name = String(input.name ?? "agent");

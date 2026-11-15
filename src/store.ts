@@ -175,6 +175,7 @@ interface AppStore {
   loadVoiceLanguages: () => Promise<void>;
   listenVoice: (lang: string) => Promise<string | null>;
   createAgent: (input: AgentCreateInput) => Promise<Agent | null>;
+  installQaTeam: () => Promise<boolean>;
   updateAgent: (id: string, patch: AgentPatch) => Promise<boolean>;
   toggleAgent: (id: string, enabled: boolean) => Promise<boolean>;
   deleteAgent: (id: string) => Promise<boolean>;
@@ -897,6 +898,22 @@ export const useApp = create<AppStore>((set, get) => {
       } catch (error) {
         get().pushToast(errorText(error), "error");
         return null;
+      }
+    },
+
+    installQaTeam: async () => {
+      try {
+        const written = await call<string[]>("agent_install_qa_team");
+        await get().loadAgents();
+        if (written.length === 0) {
+          get().pushToast(translate(lang(), "qa.teamExists"), "info");
+        } else {
+          get().pushToast(translate(lang(), "qa.teamInstalled", { n: written.length }), "ok");
+        }
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
       }
     },
 

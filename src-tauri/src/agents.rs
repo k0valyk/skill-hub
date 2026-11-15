@@ -741,6 +741,33 @@ fn agent_body(input: &AgentCreateInput, template: Option<&AgentTemplate>) -> Str
     )
 }
 
+const QA_TEAM: [(&str, &str); 3] = [
+    ("qa-tester", include_str!("../qa-agents/qa-tester.md")),
+    ("fixer", include_str!("../qa-agents/fixer.md")),
+    ("auditor", include_str!("../qa-agents/auditor.md")),
+];
+
+/// Ставить відсутніх агентів QA-команди у глобальну папку OpenCode.
+/// Існуючі файли (навіть вимкнені) не перезаписує — щоб не втратити правки користувача.
+pub fn install_qa_team() -> Result<Vec<String>> {
+    let base = global_agent_dirs()
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| crate::linking::opencode_config_dir().join("agents"));
+    std::fs::create_dir_all(&base)?;
+    let mut written = Vec::new();
+    for (name, body) in QA_TEAM {
+        let path = base.join(format!("{name}.md"));
+        let disabled = base.join(format!("{name}.md.disabled"));
+        if path.exists() || disabled.exists() {
+            continue;
+        }
+        std::fs::write(&path, body)?;
+        written.push(path.to_string_lossy().to_string());
+    }
+    Ok(written)
+}
+
 pub fn create(db: &Db, root: &Path, input: AgentCreateInput) -> Result<Agent> {
     let scope = input.scope.clone().unwrap_or_else(|| "global".into());
     let template = input

@@ -60,7 +60,7 @@ export function Projects() {
           </button>
           <button
             className="btn !py-1.5 text-[11.5px]"
-            onClick={() => void openPath(`${settings?.root ?? ""}\\projects`)}
+            onClick={() => void openPath(`${(settings?.root ?? "").replace(/[\\/]+$/, "")}/projects`)}
           >
             <FolderOpen size={12} />
             {t("projects.openFolder")}

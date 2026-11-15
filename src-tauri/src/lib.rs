@@ -30,7 +30,7 @@ fn show_main(app: &tauri::AppHandle) {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             app.manage(commands::AppState::new());
 
@@ -152,6 +152,7 @@ pub fn run() {
             commands::agents_list,
             commands::agent_tasks,
             commands::agent_create,
+            commands::agent_install_qa_team,
             commands::agent_update,
             commands::agent_toggle,
             commands::agent_delete,
@@ -172,6 +173,22 @@ pub fn run() {
             commands::voice_languages,
             commands::voice_listen,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Skill Hub не зміг запуститися");
+
+    app.run(|handle, event| {
+        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+            // Не залишаємо дочірні opencode-cli процеси після закриття застосунку.
+            if let Some(state) = handle.try_state::<commands::AppState>() {
+                if let Ok(mut handles) = state.task_handles.lock() {
+                    for (_, task) in handles.drain() {
+                        task.abort();
+                    }
+                }
+                if let Ok(mut running) = state.running.lock() {
+                    running.clear();
+                }
+            }
+        }
+    });
 }

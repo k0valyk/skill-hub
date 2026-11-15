@@ -21,6 +21,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
   const settings = useApp((state) => state.settings);
   const runAgentTaskAndWait = useApp((state) => state.runAgentTaskAndWait);
   const cancelAgentTask = useApp((state) => state.cancelAgentTask);
+  const installQaTeam = useApp((state) => state.installQaTeam);
   const chooseFolder = useApp((state) => state.chooseFolder);
   const openPath = useApp((state) => state.openPath);
 
@@ -38,6 +39,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
   const [audit, setAudit] = useState<AuditReportSummary | null>(null);
   const [currentAgent, setCurrentAgent] = useState<string | null>(null);
   const [doneStages, setDoneStages] = useState(0);
+  const [installingTeam, setInstallingTeam] = useState(false);
   const cancelRef = useRef(false);
 
   useEffect(() => {
@@ -52,6 +54,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
     setAudit(null);
     setCurrentAgent(null);
     setDoneStages(0);
+    setInstallingTeam(false);
     cancelRef.current = false;
   }, [open, qa?.id, fixer?.id, settings?.projectDir]);
 
@@ -93,7 +96,12 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   const auditPassed = (summary: AuditReportSummary | null) =>
-    Boolean(summary?.exists && summary.verdict === "pass" && summary.falseFixes === 0);
+    Boolean(
+      summary?.exists &&
+        summary.falseFixes === 0 &&
+        summary.testsOk &&
+        (summary.verdict === "pass" || summary.verdict === "warn"),
+    );
 
   const openIssues = (summary: QaReportSummary | null) =>
     (summary?.openCritical ?? 0) + (summary?.openHigh ?? 0);
@@ -287,6 +295,15 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
     onClose();
   };
 
+  const installTeam = async () => {
+    setInstallingTeam(true);
+    try {
+      await installQaTeam();
+    } finally {
+      setInstallingTeam(false);
+    }
+  };
+
   const canStart = Boolean(qa && fixer && project.trim());
   const totalStages = Math.max(1, rounds * (auditor ? 3 : 2));
   const progress =
@@ -331,12 +348,32 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
               {!qa || !fixer ? (
                 <div className="flex items-start gap-2 rounded-[10px] border border-[var(--warn)]/35 bg-[var(--warn)]/8 px-3 py-2 text-[11.5px]">
                   <ShieldAlert size={14} className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
-                  {t("qa.missing")}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p>{t("qa.missing")}</p>
+                    <button
+                      className="btn !py-1 text-[10.5px]"
+                      disabled={installingTeam}
+                      onClick={() => void installTeam()}
+                    >
+                      {installingTeam ? <Loader2 size={10} className="spin-fast" /> : null}
+                      {t("qa.installTeam")}
+                    </button>
+                  </div>
                 </div>
               ) : !auditor ? (
                 <div className="flex items-start gap-2 rounded-[10px] border border-[var(--warn)]/35 bg-[var(--warn)]/8 px-3 py-2 text-[11.5px]">
                   <ShieldAlert size={14} className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
-                  {t("qa.auditMissing")}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p>{t("qa.auditMissing")}</p>
+                    <button
+                      className="btn !py-1 text-[10.5px]"
+                      disabled={installingTeam}
+                      onClick={() => void installTeam()}
+                    >
+                      {installingTeam ? <Loader2 size={10} className="spin-fast" /> : null}
+                      {t("qa.installTeam")}
+                    </button>
+                  </div>
                 </div>
               ) : null}
 

@@ -500,7 +500,8 @@ const AgentCard = memo(function AgentCard({
           <Sparkles size={10} /> {agent.skills.length}
         </span>
         <span className="flex items-center gap-1" title={t("agents.projects")}>
-          <FolderGit2 size={10} /> {agent.projects.length + (agent.projectPath ? 1 : 0)}
+          <FolderGit2 size={10} />{" "}
+          {new Set([...agent.projects, agent.projectPath].filter(Boolean)).size}
         </span>
         <span className="flex items-center justify-end gap-1" title={t("agents.tokens")}>
           <Coins size={10} /> {formatNumber(agent.tokensIn + agent.tokensOut, lang)}

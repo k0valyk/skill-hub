@@ -1135,6 +1135,11 @@ pub async fn agent_create(
 }
 
 #[tauri::command]
+pub async fn agent_install_qa_team() -> Result<Vec<String>, String> {
+    crate::agents::install_qa_team().map_err(|error| humanize(&error))
+}
+
+#[tauri::command]
 pub async fn agent_update(
     id: String,
     patch: AgentPatch,
@@ -1555,6 +1560,20 @@ pub async fn agent_run_task(
                 _ = tokio::time::sleep_until(deadline) => {
                     timed_out = true;
                     activity = "Таймаут 15 хвилин".into();
+                    if let Ok(mut map) = running.lock() {
+                        if let Some(info) = map.get_mut(&agent_id) {
+                            info.activity = Some(activity.clone());
+                        }
+                    }
+                    let _ = app_handle.emit(
+                        "agent:activity",
+                        serde_json::json!({
+                            "agentId": &agent_id,
+                            "taskId": &task_id,
+                            "activity": &activity,
+                            "waiting": waiting
+                        }),
+                    );
                     let _ = child.start_kill();
                     break;
                 }

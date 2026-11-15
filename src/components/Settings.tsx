@@ -61,6 +61,8 @@ export function Settings() {
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
   const budgetTimerRef = useRef<number | null>(null);
+  const pendingBudgetRef = useRef<number | null>(null);
+  const draftRef = useRef<SettingsType | null>(settings);
 
   useEffect(() => setDraft(settings), [settings]);
 
@@ -82,6 +84,7 @@ export function Settings() {
   );
 
   if (!draft) return null;
+  draftRef.current = draft;
 
   const patch = (value: Partial<SettingsType>) => setDraft({ ...draft, ...value });
 
@@ -102,10 +105,12 @@ export function Settings() {
 
   const queueBudget = (value: number) => {
     const next = { ...draft, contextBudget: value };
+    pendingBudgetRef.current = value;
     setDraft(next);
     if (budgetTimerRef.current) window.clearTimeout(budgetTimerRef.current);
     budgetTimerRef.current = window.setTimeout(() => {
       budgetTimerRef.current = null;
+      pendingBudgetRef.current = null;
       void saveSettings(next);
     }, 450);
   };
@@ -114,7 +119,10 @@ export function Settings() {
     if (!budgetTimerRef.current) return;
     window.clearTimeout(budgetTimerRef.current);
     budgetTimerRef.current = null;
-    void saveSettings(draft);
+    const latest = draftRef.current ?? draft;
+    const value = pendingBudgetRef.current ?? latest.contextBudget;
+    pendingBudgetRef.current = null;
+    void saveSettings({ ...latest, contextBudget: value });
   };
 
   const copyCode = async () => {

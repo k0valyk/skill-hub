@@ -15,3 +15,4 @@ reports/fix-report.md
 reports/audit-report.json
 reports/audit-report.md
 .codegraph/
+.opencode/

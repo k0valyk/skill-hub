@@ -579,6 +579,9 @@ const uk = {
   "qa.auditTestsOk": "Тести зелені",
   "qa.auditTestsFail": "Тести з помилками",
   "qa.auditor": "Аудитор",
+  "qa.installTeam": "Встановити команду QA",
+  "qa.teamInstalled": "Додано агентів: {n}",
+  "qa.teamExists": "Агенти QA вже на місці",
 
   "error.title": "Щось пішло не так",
   "error.startup": "Проблема з папкою бібліотеки",
@@ -1170,6 +1173,9 @@ const en: Dict = {
   "qa.auditTestsOk": "Tests are green",
   "qa.auditTestsFail": "Tests have failures",
   "qa.auditor": "Auditor",
+  "qa.installTeam": "Install QA team",
+  "qa.teamInstalled": "Agents added: {n}",
+  "qa.teamExists": "QA agents are already in place",
 
   "error.title": "Something went wrong",
   "error.startup": "Library folder problem",

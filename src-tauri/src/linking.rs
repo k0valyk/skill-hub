@@ -439,4 +439,38 @@ mod tests {
         std::env::remove_var("SKILLHUB_CONFIG_DIR");
         let _ = std::fs::remove_dir_all(dirs::home_dir().unwrap().join(".config/opencode/skills/demo"));
     }
+
+    #[test]
+    fn disable_all_removes_global_and_project_links() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Db::open(&tmp.path().join("db.sqlite")).unwrap();
+        let global_target = tmp.path().join("skills/demo");
+        let project_target = tmp.path().join("proj/.opencode/skills/demo");
+        std::fs::create_dir_all(global_target.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(project_target.parent().unwrap()).unwrap();
+        std::fs::write(&global_target, "link").unwrap();
+        std::fs::write(&project_target, "link").unwrap();
+        let project = tmp.path().join("proj");
+        db.add_link(
+            "demo",
+            "global",
+            "",
+            "junction",
+            &global_target.to_string_lossy(),
+        )
+        .unwrap();
+        db.add_link(
+            "demo",
+            "project",
+            &project.to_string_lossy(),
+            "junction",
+            &project_target.to_string_lossy(),
+        )
+        .unwrap();
+        assert_eq!(db.links().unwrap().len(), 2);
+        disable_all(&db, "demo").unwrap();
+        assert!(!global_target.exists());
+        assert!(!project_target.exists());
+        assert!(db.links().unwrap().is_empty());
+    }
 }
