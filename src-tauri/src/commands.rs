@@ -1973,3 +1973,37 @@ pub async fn opencode_profile_preview() -> Result<String, String> {
         .to_string_lossy()
         .to_string())
 }
+
+#[cfg(test)]
+mod audit_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn parses_audit_report_summary() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("reports")).unwrap();
+        std::fs::write(
+            dir.path().join("reports/audit-report.json"),
+            r#"{"generatedAt":"2026-11-15T21:31:00Z","verdict":"warn","summary":{"verified":5,"partial":0,"false":0,"agentsFail":0},"tests":{"frontend":"pass","build":"pass","rust":"pass","check":"pass","ui":"skipped"}}"#,
+        )
+        .unwrap();
+        let summary = agent_audit_report(dir.path().to_string_lossy().to_string())
+            .await
+            .unwrap();
+        assert!(summary.exists);
+        assert_eq!(summary.verdict, "warn");
+        assert_eq!(summary.verified, 5);
+        assert_eq!(summary.false_fixes, 0);
+        assert!(summary.tests_ok);
+    }
+
+    #[tokio::test]
+    async fn missing_audit_report_is_reported_as_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let summary = agent_audit_report(dir.path().to_string_lossy().to_string())
+            .await
+            .unwrap();
+        assert!(!summary.exists);
+        assert_eq!(summary.verdict, "missing");
+    }
+}
