@@ -57,6 +57,7 @@ CLI — окремий крейт `src-tauri/cli` у тому самому Cargo
 | `linking.rs` | Junction/копія в `.opencode/skills`, `disable`, бюджет, `connect_opencode` |
 | `projects.rs` | Список проєктів, git-статус, план публікації, `.gitignore`, push/PR-логіка |
 | `mcp.rs` | JSON-RPC 2.0 по stdio, схеми інструментів, ранжування, ліниве читання |
+| `agents.rs` | Скан і парсинг агентів OpenCode V2, метадані, зв'язки з папками/скілами, історія завдань, запуск `opencode run --format json`, парсер подій |
 | `stats.rs` | Агрегати для сторінки статистики та дублікати |
 | `export.rs` | Zip-експорт/імпорт, бекап |
 | `feed.rs` | Стрічка відкриттів із GitHub (кеш у БД) |
@@ -137,6 +138,26 @@ on_demand  = Σ tokens_est(повний текст)
 
 ---
 
+## 5.1 Агенти OpenCode
+
+Discovery:
+
+```text
+~/.config/opencode/agents/*.md        ← глобальні (і старий agent/)
+<project>/.opencode/agents/*.md       ← проєктні
+```
+
+Проєкти беруться з `projects/`, `project_dir` і всіх прив'язок у `agent_projects`; вкладені теки дають ID `team/reviewer`. Вимкнений агент лежить як `<name>.md.disabled` — OpenCode його не бачить, а SkillHub показує картку зі статусом «вимкнений».
+
+- **Джерело правди — файл.** Frontmatter парситься вручну: V2 `description/mode/model/color/permissions/steps/hidden` плюс legacy `tools`/`permission`. Метадані (людська назва, іконка, теги, авто-дозволи) живуть у `agents_meta` за шляхом; втрата БД не ламає агентів.
+- **Запуск завдання**: `opencode run --agent <key> --format json [--auto] --title "Skill Hub · <key>" "<prompt>"` з `cwd` вибраного проєкту. CLI шукається в OpenCode Desktop, PATH або `SKILLHUB_OPENCODE_CLI`; `.cmd/.bat` обгортаються в `cmd /C`.
+- **Потік подій** читається построчно: `text` → вивід і рядок активності, `tool_use` → «🔧 tool», `step_finish` → токени/вартість, `error` → текст помилки, `permission` → статус «чекає підтвердження». Події летять у UI (`agent:activity`, `agent:finished`), а підсумок пишеться в `agent_tasks`.
+- **Скасування** — `JoinHandle::abort()` + `kill_on_drop`, запис у БД отримує статус `cancelled`.
+- **Скіли агента** зберігаються в `agent_skills` і синхронізуються у видимий блок у тілі `.md` між `<!-- skillhub:skills:start/end -->`, щоб агент знав, що є в бібліотеці, і завантажував текст ліниво через MCP.
+- **Папки** — це `cwd` для запуску і джерело проєктних агентів; OpenCode отримує доступ до workspace через звичайні permissions.
+
+---
+
 ## 6. Дані на диску
 
 ### `skillhub.json` (поруч з елементом)
@@ -176,6 +197,9 @@ on_demand  = Σ tokens_est(повний текст)
 | `profiles`, `profile_items` | Набори скілів |
 | `kv` | Дрібні прапорці (наприклад, дата додавання ключа) |
 | `feed_cache` | Кеш стрічки відкриттів |
+| `agents_meta` | Display name, іконка, теги, авто-дозволи (ключ — шлях до `.md`) |
+| `agent_projects`, `agent_skills` | Зв'язки агента з папками проєктів і скілами бібліотеки |
+| `agent_tasks` | Історія запусків: prompt, статус, output, тривалість, токени, вартість |
 
 Схема створюється ідемпотентно (`CREATE TABLE IF NOT EXISTS`) при відкритті.
 
@@ -197,6 +221,7 @@ src/
 │  ├─ Sidebar, TopBar, LibraryView, ItemCard
 │  ├─ DetailDrawer, AddPreview, CommandPalette, Toasts
 │  ├─ Settings, Projects (+PublishDialog), Stats, Discover
+│  ├─ Agents (сітка/карта, drawer, створення, історія завдань)
 │  ├─ ProfileEditor, common (KindIcon, BudgetBar, Toggle, …)
 └─ styles.css                # токени, glass, анімації, reduce-motion
 ```
