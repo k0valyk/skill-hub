@@ -1,4 +1,6 @@
 import type {
+  Agent,
+  AgentTask,
   Budget,
   DuplicateGroup,
   FeedCard,
@@ -128,6 +130,153 @@ let profiles: Profile[] = [
     description: "Мультитенантність, міграції, аудит",
     itemIds: ["saas-backend-patterns", "mcp-postgres"],
     createdAt: iso(8),
+  },
+];
+
+let mockAgents: Agent[] = [
+  {
+    id: "g:agent-factory",
+    key: "agent-factory",
+    path: "C:\\Users\\demo\\.config\\opencode\\agents\\agent-factory.md",
+    fileName: "agent-factory.md",
+    scope: "global",
+    projectPath: null,
+    name: "Agent Factory",
+    techName: "agent-factory",
+    description: "Створює й редагує агентів OpenCode за описом, підбирає шаблон і перевіряє формат.",
+    icon: "🏭|#8b7cff",
+    mode: "primary",
+    model: "deepseek/deepseek-flash",
+    color: "#8b7cff",
+    hidden: false,
+    steps: 16,
+    permissions: [
+      { action: "edit", resource: "~/.config/opencode/agents/*", effect: "allow" },
+      { action: "shell", resource: "*", effect: "ask" },
+      { action: "subagent", resource: "*", effect: "deny" },
+    ],
+    tags: ["meta", "agents"],
+    skills: [],
+    projects: [],
+    enabled: true,
+    status: "idle",
+    activity: null,
+    lastRunAt: iso(2),
+    lastStatus: "ok",
+    tokensIn: 12400,
+    tokensOut: 3100,
+    costUsd: 0.0042,
+    bodyTokens: 420,
+    bodyPreview: "You are agent-factory...",
+    updatedAt: iso(2),
+    autoApprove: true,
+  },
+  {
+    id: "g:skill-finder",
+    key: "skill-finder",
+    path: "C:\\Users\\demo\\.config\\opencode\\agents\\skill-finder.md",
+    fileName: "skill-finder.md",
+    scope: "global",
+    projectPath: null,
+    name: "Skill Finder",
+    techName: "skill-finder",
+    description: "Шукає потрібні скіли в Skill Hub, вмикає 1–3 найкращі та вимикає зайві.",
+    icon: "🧭|#2dd4bf",
+    mode: "subagent",
+    model: "deepseek/deepseek-flash",
+    color: "#2dd4bf",
+    hidden: false,
+    steps: 8,
+    permissions: [
+      { action: "skillhub_*", resource: "*", effect: "allow" },
+      { action: "shell", resource: "*", effect: "ask" },
+    ],
+    tags: ["skills", "search"],
+    skills: ["frontend-motion-kit"],
+    projects: [],
+    enabled: true,
+    status: "working",
+    activity: "Шукаю скіли для анімацій…",
+    lastRunAt: iso(0),
+    lastStatus: "ok",
+    tokensIn: 5400,
+    tokensOut: 820,
+    costUsd: 0.0011,
+    bodyTokens: 260,
+    bodyPreview: "Search Skill Hub lazily...",
+    updatedAt: iso(4),
+    autoApprove: false,
+  },
+  {
+    id: "p:8f2a1c3d:reviewer",
+    key: "reviewer",
+    path: "C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api\\.opencode\\agents\\reviewer.md",
+    fileName: "reviewer.md",
+    scope: "project",
+    projectPath: "C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api",
+    name: "Code Reviewer",
+    techName: "reviewer",
+    description: "Перевіряє зміни на коректність і регресії, нічого не редагуючи.",
+    icon: "🧪|#ff7aa2",
+    mode: "subagent",
+    model: "deepseek/deepseek-chat",
+    color: "#ff7aa2",
+    hidden: false,
+    steps: 6,
+    permissions: [
+      { action: "edit", resource: "*", effect: "deny" },
+      { action: "shell", resource: "git diff*", effect: "allow" },
+    ],
+    tags: ["review", "quality"],
+    skills: ["deepseek-cheap-review"],
+    projects: ["C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api"],
+    enabled: true,
+    status: "waiting",
+    activity: "Очікує підтвердження на запуск тестів",
+    lastRunAt: iso(0),
+    lastStatus: "ok",
+    tokensIn: 9100,
+    tokensOut: 1400,
+    costUsd: 0.0023,
+    bodyTokens: 380,
+    bodyPreview: "Review the current changes...",
+    updatedAt: iso(0),
+    autoApprove: false,
+  },
+];
+
+const mockAgentTasks: AgentTask[] = [
+  {
+    id: "task-1",
+    agentId: "p:8f2a1c3d:reviewer",
+    agentName: "Code Reviewer",
+    projectPath: "C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api",
+    prompt: "Перевір останні зміни в API та знайди ризики.",
+    status: "ok",
+    output: "Знайдено 2 зауваження:\n1. src/api/orders.ts:44 — немає перевірки tenantId.\n2. src/api/orders.ts:88 — тест не покриває відмову платежу.",
+    startedAt: iso(0),
+    finishedAt: iso(0),
+    durationMs: 42000,
+    tokensIn: 9100,
+    tokensOut: 1400,
+    costUsd: 0.0023,
+    exitCode: 0,
+  },
+  {
+    id: "task-2",
+    agentId: "g:agent-factory",
+    agentName: "Agent Factory",
+    projectPath: "",
+    prompt: "Створи агента для перевірки міграцій.",
+    status: "ok",
+    output: "Створено ~/.config/opencode/agents/migration-reviewer.md",
+    startedAt: iso(2),
+    finishedAt: iso(2),
+    durationMs: 21000,
+    tokensIn: 6200,
+    tokensOut: 900,
+    costUsd: 0.0016,
+    exitCode: 0,
   },
 ];
 
@@ -530,6 +679,153 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
       return { connected: true, cliPath: "C:\\SkillHub\\.skillhub\\bin\\skillhub-cli.exe", configPath: "~/.config/opencode/opencode.json" } as T;
     case "choose_folder":
       return "C:\\Users\\demo\\Documents\\SkillHub" as T;
+    case "agents_list":
+      return mockAgents as T;
+    case "agent_tasks":
+      return mockAgentTasks.filter((task) => task.agentId === String(args?.id ?? "")) as T;
+    case "agent_templates":
+      return [
+        {
+          id: "developer",
+          name: "Розробник",
+          description: "Пише й редагує код, дотримується стилю та тестів.",
+          body: "You are a careful software developer. Read the code before changing it.",
+          mode: "primary",
+        },
+        {
+          id: "reviewer",
+          name: "Рев'юер",
+          description: "Перевіряє зміни на регресії, нічого не редагуючи.",
+          body: "Review the current changes. List findings in severity order.",
+          mode: "subagent",
+        },
+      ] as T;
+    case "agents_runtime":
+      return "C:\\Users\\demo\\AppData\\Roaming\\ai.opencode.desktop\\cli\\2.2.7-x64\\opencode-cli.exe" as T;
+    case "agent_create": {
+      const input = (args?.input ?? {}) as Record<string, unknown>;
+      const name = String(input.name ?? "agent");
+      const agent: Agent = {
+        ...mockAgents[0],
+        id: `g:${name}`,
+        key: name,
+        techName: name,
+        name: String(input.displayName ?? name),
+        description: String(input.description ?? ""),
+        mode: String(input.mode ?? "subagent"),
+        model: (input.model as string | null) ?? null,
+        icon: "🛠️|#5b8cff",
+        tags: (input.tags as string[]) ?? [],
+        skills: [],
+        projects: [],
+        status: "idle",
+        activity: null,
+        lastRunAt: null,
+        lastStatus: null,
+        tokensIn: 0,
+        tokensOut: 0,
+        costUsd: 0,
+        enabled: true,
+        path: `C:\\Users\\demo\\.config\\opencode\\agents\\${name}.md`,
+        fileName: `${name}.md`,
+        updatedAt: new Date().toISOString(),
+      };
+      mockAgents = [agent, ...mockAgents];
+      return agent as T;
+    }
+    case "agent_update": {
+      const id = String(args?.id ?? "");
+      const patch = (args?.patch ?? {}) as Record<string, unknown>;
+      mockAgents = mockAgents.map((agent) =>
+        agent.id === id
+          ? {
+              ...agent,
+              name: (patch.displayName as string) ?? agent.name,
+              description: (patch.description as string) ?? agent.description,
+              icon: (patch.icon as string) ?? agent.icon,
+              tags: (patch.tags as string[]) ?? agent.tags,
+              autoApprove: (patch.autoApprove as boolean) ?? agent.autoApprove,
+            }
+          : agent,
+      );
+      return mockAgents.find((agent) => agent.id === id) as T;
+    }
+    case "agent_toggle": {
+      const id = String(args?.id ?? "");
+      const enabled = Boolean(args?.enabled);
+      mockAgents = mockAgents.map((agent) => (agent.id === id ? { ...agent, enabled } : agent));
+      return mockAgents.find((agent) => agent.id === id) as T;
+    }
+    case "agent_delete": {
+      const id = String(args?.id ?? "");
+      mockAgents = mockAgents.filter((agent) => agent.id !== id);
+      return mockAgents as T;
+    }
+    case "agent_link_project": {
+      const id = String(args?.id ?? "");
+      const path = String(args?.path ?? "");
+      mockAgents = mockAgents.map((agent) =>
+        agent.id === id ? { ...agent, projects: [...new Set([...agent.projects, path])] } : agent,
+      );
+      return mockAgents.find((agent) => agent.id === id) as T;
+    }
+    case "agent_unlink_project": {
+      const id = String(args?.id ?? "");
+      const path = String(args?.path ?? "");
+      mockAgents = mockAgents.map((agent) =>
+        agent.id === id ? { ...agent, projects: agent.projects.filter((entry) => entry !== path) } : agent,
+      );
+      return mockAgents.find((agent) => agent.id === id) as T;
+    }
+    case "agent_link_skill": {
+      const id = String(args?.id ?? "");
+      const itemId = String(args?.itemId ?? "");
+      mockAgents = mockAgents.map((agent) =>
+        agent.id === id ? { ...agent, skills: [...new Set([...agent.skills, itemId])] } : agent,
+      );
+      return mockAgents.find((agent) => agent.id === id) as T;
+    }
+    case "agent_unlink_skill": {
+      const id = String(args?.id ?? "");
+      const itemId = String(args?.itemId ?? "");
+      mockAgents = mockAgents.map((agent) =>
+        agent.id === id ? { ...agent, skills: agent.skills.filter((entry) => entry !== itemId) } : agent,
+      );
+      return mockAgents.find((agent) => agent.id === id) as T;
+    }
+    case "agent_choose_icon":
+      return null as T;
+    case "agent_export":
+      return "C:\\Users\\demo\\Documents\\agent.md" as T;
+    case "agent_import":
+      return mockAgents[0] as T;
+    case "agent_run_task": {
+      const id = String(args?.id ?? "");
+      const agent = mockAgents.find((entry) => entry.id === id) ?? mockAgents[0];
+      const task: AgentTask = {
+        id: `task-${Date.now()}`,
+        agentId: id,
+        agentName: agent.name,
+        projectPath: String(args?.project ?? ""),
+        prompt: String(args?.prompt ?? ""),
+        status: "running",
+        output: "",
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        durationMs: 0,
+        tokensIn: 0,
+        tokensOut: 0,
+        costUsd: 0,
+        exitCode: null,
+      };
+      mockAgentTasks.unshift(task);
+      mockAgents = mockAgents.map((entry) =>
+        entry.id === id ? { ...entry, status: "working", activity: "Виконую завдання…" } : entry,
+      );
+      return task as T;
+    }
+    case "agent_cancel_task":
+      return undefined as T;
     case "open_path":
     case "open_url":
       return undefined as T;

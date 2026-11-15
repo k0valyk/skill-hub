@@ -16,6 +16,7 @@ import { useApp, useT } from "@/store";
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   library: { title: "library.title", subtitle: "app.tagline" },
   discover: { title: "discover.title", subtitle: "discover.subtitle" },
+  agents: { title: "agents.title", subtitle: "agents.subtitle" },
   projects: { title: "projects.title", subtitle: "projects.subtitle" },
   stats: { title: "stats.title", subtitle: "stats.subtitle" },
   settings: { title: "settings.title", subtitle: "settings.subtitle" },
@@ -64,6 +65,7 @@ export function TopBar() {
 
   const meta = TITLES[view] ?? TITLES.library;
   const showLibraryControls = view === "library";
+  const showAddBar = view !== "agents";
 
   return (
     <header className="relative z-10 shrink-0 px-7 pb-3 pt-5">
@@ -111,6 +113,8 @@ export function TopBar() {
         </div>
       </div>
 
+      {showAddBar ? (
+        <>
       <div className="mt-4 flex items-center gap-2">
         <div className="group relative flex flex-1 items-center">
           <Sparkles
@@ -183,6 +187,8 @@ export function TopBar() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+        </>
+      ) : null}
 
       {showLibraryControls ? (
         <div className="mt-3 flex items-center gap-2">

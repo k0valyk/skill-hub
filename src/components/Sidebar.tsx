@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
+  Bot,
   ChevronRight,
   Compass,
   FolderGit2,
@@ -23,6 +24,7 @@ import { ProfileEditor } from "./ProfileEditor";
 const NAV: { view: View; key: TranslationKey; icon: typeof Library }[] = [
   { view: "library", key: "nav.library", icon: Library },
   { view: "discover", key: "nav.discover", icon: Compass },
+  { view: "agents", key: "nav.agents", icon: Bot },
   { view: "projects", key: "nav.projects", icon: FolderGit2 },
   { view: "stats", key: "nav.stats", icon: BarChart3 },
 ];

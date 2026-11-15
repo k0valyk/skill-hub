@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
+  Bot,
   Compass,
   Download,
   FolderGit2,
@@ -70,6 +71,13 @@ export function CommandPalette() {
         group: t("palette.nav"),
         icon: <Compass size={14} />,
         run: () => setView("discover"),
+      },
+      {
+        id: "nav.agents",
+        label: t("nav.agents"),
+        group: t("palette.nav"),
+        icon: <Bot size={14} />,
+        run: () => setView("agents"),
       },
       {
         id: "nav.projects",

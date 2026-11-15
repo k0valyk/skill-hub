@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, TriangleAlert } from "lucide-react";
 import { AddPreview } from "@/components/AddPreview";
+import { Agents } from "@/components/Agents";
 import { CommandPalette } from "@/components/CommandPalette";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { Discover } from "@/components/Discover";
@@ -27,6 +28,8 @@ export default function App() {
   const focusAdd = useApp((state) => state.focusAdd);
   const setView = useApp((state) => state.setView);
   const pushToast = useApp((state) => state.pushToast);
+  const setAgentActivity = useApp((state) => state.setAgentActivity);
+  const finishAgentTask = useApp((state) => state.finishAgentTask);
   const t = useT();
 
   useEffect(() => {
@@ -58,6 +61,22 @@ export default function App() {
     void onEvent<number>("updates:found", (count) => {
       if (count > 0) pushToast(t("toast.updatesFound", { n: count }), "info");
     }).then((off) => offs.push(off));
+    void onEvent<{
+      agentId: string;
+      taskId: string;
+      activity: string;
+      waiting: boolean;
+    }>("agent:activity", (payload) => setAgentActivity(payload)).then((off) => offs.push(off));
+    void onEvent<{
+      agentId: string;
+      taskId: string;
+      status: string;
+      exitCode?: number | null;
+      durationMs: number;
+      tokensIn: number;
+      tokensOut: number;
+      costUsd: number;
+    }>("agent:finished", (payload) => finishAgentTask(payload)).then((off) => offs.push(off));
     return () => offs.forEach((off) => off());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,6 +144,8 @@ export default function App() {
                 </div>
               ) : view === "discover" ? (
                 <Discover />
+              ) : view === "agents" ? (
+                <Agents />
               ) : view === "projects" ? (
                 <Projects />
               ) : view === "stats" ? (

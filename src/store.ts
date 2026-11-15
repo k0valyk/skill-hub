@@ -1,7 +1,12 @@
 import { create } from "zustand";
-import { call, errorText } from "./lib/api";
+import { call, errorText, isTauri } from "./lib/api";
 import { translate, type Lang, type TranslationKey } from "./lib/i18n";
 import type {
+  Agent,
+  AgentCreateInput,
+  AgentPatch,
+  AgentTask,
+  AgentTemplate,
   BatchPreview,
   Bootstrap,
   Budget,
@@ -24,7 +29,7 @@ import type {
   UpdateInfo,
 } from "./lib/types";
 
-export type View = "library" | "discover" | "projects" | "stats" | "settings";
+export type View = "library" | "discover" | "agents" | "projects" | "stats" | "settings";
 export type Layout = "grid" | "list";
 export type SortKey = "recent" | "name" | "stars" | "size";
 export type KindFilter = Kind | "all" | "enabled" | "favorites";
@@ -81,6 +86,11 @@ interface AppStore {
   duplicates: DuplicateGroup[];
   updates: UpdateInfo[];
   device: DeviceStart | null;
+  agents: Agent[];
+  agentsLoading: boolean;
+  agentTemplates: AgentTemplate[];
+  agentActivity: Record<string, { taskId: string; activity: string; waiting: boolean }>;
+  agentRuntime: string | null;
 
   toasts: Toast[];
 
@@ -128,6 +138,44 @@ interface AppStore {
   exportLibrary: (dest?: string) => Promise<string | null>;
   importLibrary: (src?: string) => Promise<ImportResult | null>;
   backupLibrary: () => Promise<string | null>;
+  loadAgents: () => Promise<void>;
+  loadAgentTemplates: () => Promise<void>;
+  loadAgentRuntime: () => Promise<void>;
+  createAgent: (input: AgentCreateInput) => Promise<Agent | null>;
+  updateAgent: (id: string, patch: AgentPatch) => Promise<boolean>;
+  toggleAgent: (id: string, enabled: boolean) => Promise<boolean>;
+  deleteAgent: (id: string) => Promise<boolean>;
+  linkAgentProject: (id: string, path: string) => Promise<boolean>;
+  unlinkAgentProject: (id: string, path: string) => Promise<boolean>;
+  linkAgentSkill: (id: string, itemId: string) => Promise<boolean>;
+  unlinkAgentSkill: (id: string, itemId: string) => Promise<boolean>;
+  pickAgentIcon: (id: string) => Promise<boolean>;
+  exportAgent: (id: string) => Promise<string | null>;
+  importAgent: (scope: string, project?: string) => Promise<boolean>;
+  runAgentTask: (
+    id: string,
+    prompt: string,
+    project?: string,
+    autoApprove?: boolean,
+  ) => Promise<AgentTask | null>;
+  cancelAgentTask: (id: string) => Promise<void>;
+  loadAgentTasks: (id: string) => Promise<AgentTask[]>;
+  setAgentActivity: (payload: {
+    agentId: string;
+    taskId: string;
+    activity: string;
+    waiting: boolean;
+  }) => void;
+  finishAgentTask: (payload: {
+    agentId: string;
+    taskId: string;
+    status: string;
+    exitCode?: number | null;
+    durationMs: number;
+    tokensIn: number;
+    tokensOut: number;
+    costUsd: number;
+  }) => void;
   chooseFolder: () => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
   openUrl: (url: string) => Promise<void>;
@@ -154,6 +202,11 @@ export const useApp = create<AppStore>((set, get) => {
   const upsertItem = (items: Item[], item: Item): Item[] => {
     const rest = items.filter((existing) => existing.id !== item.id);
     return [item, ...rest];
+  };
+
+  const upsertAgent = (agents: Agent[], agent: Agent): Agent[] => {
+    const rest = agents.filter((existing) => existing.id !== agent.id);
+    return [agent, ...rest];
   };
 
   return {
@@ -196,6 +249,11 @@ export const useApp = create<AppStore>((set, get) => {
     duplicates: [],
     updates: [],
     device: null,
+    agents: [],
+    agentsLoading: false,
+    agentTemplates: [],
+    agentActivity: {},
+    agentRuntime: null,
 
     toasts: [],
 
@@ -677,6 +735,292 @@ export const useApp = create<AppStore>((set, get) => {
         get().pushToast(errorText(error), "error");
         return null;
       }
+    },
+
+    loadAgents: async () => {
+      set({ agentsLoading: true });
+      try {
+        const agents = await call<Agent[]>("agents_list");
+        set({ agents, agentsLoading: false });
+      } catch (error) {
+        set({ agentsLoading: false });
+        get().pushToast(errorText(error), "error");
+      }
+    },
+
+    loadAgentTemplates: async () => {
+      try {
+        const agentTemplates = await call<AgentTemplate[]>("agent_templates");
+        set({ agentTemplates });
+      } catch {
+        /* шаблони не критичні */
+      }
+    },
+
+    loadAgentRuntime: async () => {
+      try {
+        const agentRuntime = await call<string | null>("agents_runtime");
+        set({ agentRuntime });
+      } catch {
+        set({ agentRuntime: null });
+      }
+    },
+
+    createAgent: async (input) => {
+      try {
+        const agent = await call<Agent>("agent_create", { input });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        say("agents.created", { name: agent.name });
+        return agent;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return null;
+      }
+    },
+
+    updateAgent: async (id, patch) => {
+      try {
+        const agent = await call<Agent>("agent_update", { id, patch });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    toggleAgent: async (id, enabled) => {
+      try {
+        const agent = await call<Agent>("agent_toggle", { id, enabled });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        say(enabled ? "toast.enabled" : "toast.disabled", { name: agent.name });
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    deleteAgent: async (id) => {
+      try {
+        const agents = await call<Agent[]>("agent_delete", { id, confirm: true });
+        set({ agents });
+        say("agents.deleted");
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    linkAgentProject: async (id, path) => {
+      try {
+        const agent = await call<Agent>("agent_link_project", { id, path });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    unlinkAgentProject: async (id, path) => {
+      try {
+        const agent = await call<Agent>("agent_unlink_project", { id, path });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    linkAgentSkill: async (id, itemId) => {
+      try {
+        const agent = await call<Agent>("agent_link_skill", { id, itemId });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    unlinkAgentSkill: async (id, itemId) => {
+      try {
+        const agent = await call<Agent>("agent_unlink_skill", { id, itemId });
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    pickAgentIcon: async (id) => {
+      try {
+        const agent = await call<Agent | null>("agent_choose_icon", { id });
+        if (!agent) return false;
+        set((state) => ({ agents: upsertAgent(state.agents, agent) }));
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    exportAgent: async (id) => {
+      try {
+        const path = await call<string>("agent_export", { id, dest: null });
+        get().pushToast(translate(lang(), "agents.exported", { path }), "ok");
+        return path;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return null;
+      }
+    },
+
+    importAgent: async (scope, project) => {
+      try {
+        const agent = await call<Agent | null>("agent_import", {
+          scope,
+          project: project ?? null,
+        });
+        if (!agent) return false;
+        await get().loadAgents();
+        say("agents.imported", { name: agent.name });
+        return true;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return false;
+      }
+    },
+
+    runAgentTask: async (id, prompt, project, autoApprove) => {
+      try {
+        const task = await call<AgentTask>("agent_run_task", {
+          id,
+          prompt,
+          project: project ?? null,
+          autoApprove: autoApprove ?? null,
+        });
+        set((state) => ({
+          agentActivity: {
+            ...state.agentActivity,
+            [id]: { taskId: task.id, activity: "Запуск…", waiting: false },
+          },
+          agents: state.agents.map((agent) =>
+            agent.id === id
+              ? { ...agent, status: "working", activity: "Запуск…" }
+              : agent,
+          ),
+        }));
+        if (!isTauri) {
+          window.setTimeout(() => {
+            get().finishAgentTask({
+              agentId: id,
+              taskId: task.id,
+              status: "ok",
+              exitCode: 0,
+              durationMs: 2400,
+              tokensIn: 820,
+              tokensOut: 96,
+              costUsd: 0.0004,
+            });
+          }, 2400);
+        }
+        return task;
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return null;
+      }
+    },
+
+    cancelAgentTask: async (id) => {
+      try {
+        await call("agent_cancel_task", { id });
+        set((state) => {
+          const next = { ...state.agentActivity };
+          delete next[id];
+          return {
+            agentActivity: next,
+            agents: state.agents.map((agent) =>
+              agent.id === id ? { ...agent, status: "idle", activity: null } : agent,
+            ),
+          };
+        });
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+      }
+    },
+
+    loadAgentTasks: async (id) => {
+      try {
+        return await call<AgentTask[]>("agent_tasks", { id, limit: 20 });
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return [];
+      }
+    },
+
+    setAgentActivity: (payload) =>
+      set((state) => ({
+        agentActivity: {
+          ...state.agentActivity,
+          [payload.agentId]: {
+            taskId: payload.taskId,
+            activity: payload.activity,
+            waiting: payload.waiting,
+          },
+        },
+        agents: state.agents.map((agent) =>
+          agent.id === payload.agentId
+            ? {
+                ...agent,
+                status: payload.waiting ? "waiting" : "working",
+                activity: payload.activity,
+              }
+            : agent,
+        ),
+      })),
+
+    finishAgentTask: (payload) => {
+      const agent = get().agents.find((entry) => entry.id === payload.agentId);
+      set((state) => {
+        const agentActivity = { ...state.agentActivity };
+        delete agentActivity[payload.agentId];
+        return {
+          agentActivity,
+          agents: state.agents.map((entry) =>
+            entry.id === payload.agentId
+              ? {
+                  ...entry,
+                  status: payload.status === "error" ? "error" : "idle",
+                  activity: null,
+                  lastRunAt: new Date().toISOString(),
+                  lastStatus: payload.status,
+                  tokensIn: entry.tokensIn + payload.tokensIn,
+                  tokensOut: entry.tokensOut + payload.tokensOut,
+                  costUsd: entry.costUsd + payload.costUsd,
+                }
+              : entry,
+          ),
+        };
+      });
+      if (payload.status === "ok") {
+        say("agents.taskDone", { name: agent?.name ?? "Agent" });
+      } else if (payload.status === "cancelled") {
+        get().pushToast(
+          translate(lang(), "agents.taskCancelledToast", { name: agent?.name ?? "Agent" }),
+          "info",
+        );
+      } else {
+        get().pushToast(
+          translate(lang(), "agents.taskFailed", { name: agent?.name ?? "Agent" }),
+          "error",
+        );
+      }
+      void get().loadAgents();
     },
 
     chooseFolder: async () => {

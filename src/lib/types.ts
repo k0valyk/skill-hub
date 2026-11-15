@@ -295,3 +295,92 @@ export interface ItemPatch {
   rating?: number;
   notes?: string;
 }
+
+export type AgentStatus = "idle" | "working" | "waiting" | "error";
+
+export interface AgentPermission {
+  action: string;
+  resource: string;
+  effect: string;
+}
+
+export interface Agent {
+  id: string;
+  key: string;
+  path: string;
+  fileName: string;
+  scope: "global" | "project" | string;
+  projectPath?: string | null;
+  name: string;
+  techName: string;
+  description: string;
+  icon: string;
+  mode: string;
+  model?: string | null;
+  color?: string | null;
+  hidden: boolean;
+  steps?: number | null;
+  permissions: AgentPermission[];
+  tags: string[];
+  skills: string[];
+  projects: string[];
+  enabled: boolean;
+  status: AgentStatus | string;
+  activity?: string | null;
+  lastRunAt?: string | null;
+  lastStatus?: string | null;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  bodyTokens: number;
+  bodyPreview: string;
+  updatedAt: string;
+  autoApprove: boolean;
+}
+
+export interface AgentTask {
+  id: string;
+  agentId: string;
+  agentName: string;
+  projectPath: string;
+  prompt: string;
+  status: string;
+  output: string;
+  startedAt: string;
+  finishedAt?: string | null;
+  durationMs: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  exitCode?: number | null;
+}
+
+export interface AgentTemplate {
+  id: string;
+  name: string;
+  description: string;
+  body: string;
+  mode: string;
+}
+
+export interface AgentCreateInput {
+  name: string;
+  displayName?: string | null;
+  description: string;
+  mode?: string | null;
+  model?: string | null;
+  color?: string | null;
+  body?: string | null;
+  scope?: string | null;
+  project?: string | null;
+  template?: string | null;
+  tags?: string[] | null;
+}
+
+export interface AgentPatch {
+  displayName?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  tags?: string[] | null;
+  autoApprove?: boolean | null;
+}
