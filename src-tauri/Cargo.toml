@@ -1,6 +1,6 @@
 [package]
 name = "skillhub"
-version = "0.3.0"
+version = "0.3.1"
 description = "Skill Hub вЂ” Р»РѕРєР°Р»СЊРЅР° Р±С–Р±Р»С–РѕС‚РµРєР° СЃРєС–Р»С–РІ, РїР»Р°РіС–РЅС–РІ С– Р°РіРµРЅС‚С–РІ РґР»СЏ OpenCode"
 authors = ["k0valyk"]
 edition = "2021"

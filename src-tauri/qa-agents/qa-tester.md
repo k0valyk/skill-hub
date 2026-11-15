@@ -47,6 +47,7 @@ permissions:
   - `cargo test --manifest-path src-tauri/Cargo.toml --lib`
   - `cargo check --manifest-path src-tauri/Cargo.toml --bins --tests`
 - Якщо є `scripts/qa-ui.mjs` — запусти його для UI-перевірок у браузері (mock-дані).
+- Якщо доступний скіл `skillhub-qa` — використовуй його команди, сценарії та підказки.
 - Для ручних UI-перевірок запусти застосунок і пройди сценарії. Не змінюй файли поза `reports/`.
 - Перевіряй консоль на помилки, зависання, повторні запити, відсутність таймаутів.
 
