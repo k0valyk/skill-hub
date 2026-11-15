@@ -58,7 +58,10 @@ impl Kind {
     }
 
     pub fn is_linkable(&self) -> bool {
-        matches!(self, Kind::Skill | Kind::Agent | Kind::Command | Kind::Plugin)
+        matches!(
+            self,
+            Kind::Skill | Kind::Agent | Kind::Command | Kind::Plugin | Kind::TokenSaver
+        )
     }
 }
 
@@ -299,4 +302,15 @@ pub struct FeedCard {
     pub kind: Kind,
     pub tags: Vec<String>,
     pub license: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_saver_can_be_linked() {
+        assert!(Kind::TokenSaver.is_linkable());
+        assert_eq!(Kind::from_str("token-saver"), Kind::TokenSaver);
+    }
 }

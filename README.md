@@ -78,8 +78,9 @@ npm.cmd run dev
 Тести:
 
 ```powershell
-npm.cmd test                                        # vitest: фільтри, сортування, формат
+npm.cmd test                                        # vitest: фільтри, сортування, формат, голос
 cargo test --manifest-path src-tauri/Cargo.toml     # Rust: правила, сортування, лікування, MCP
+npm.cmd run qa:ui                                   # Playwright + Edge: вкладки, палітра, агенти, голос, QA-модалка
 ```
 
 CLI живе в окремому крейті `skillhub-cli` (workspace поруч із GUI) і використовує ту саму бібліотеку:
@@ -203,7 +204,7 @@ Documents/SkillHub/
 
 ## Стан проєкту
 
-Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` (23 тести) і `cargo test` (43 тести). Перевірено наживо: аналіз реального репозиторію з DeepSeek, кеш описів, публікація приватного репо, бекап бібліотеки, `check-updates`, MCP over stdio, junction-підключення, розділ агентів і запуск завдань через OpenCode CLI (на реальному CLI та з тестовим CLI-заглушкою), голосове розпізнавання Windows, QA-цикл у браузерному mock-режимі, інсталятори MSI/NSIS. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
+Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` (23 тести) і `cargo test` (44 тести). Перевірено наживо: аналіз реального репозиторію з DeepSeek, кеш описів, публікація приватного репо, бекап бібліотеки, `check-updates`, MCP over stdio, junction-підключення, розділ агентів і запуск завдань через OpenCode CLI (на реальному CLI та з тестовим CLI-заглушкою), голосове розпізнавання Windows, QA-цикл у браузерному mock-режимі, інсталятори MSI/NSIS. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Що потрібно налаштувати вручну: `GitHub OAuth Client ID` або PAT (для GitHub-функцій) і ключ DeepSeek (для AI-описів). Усе інше працює локально без мережі, окрім GitHub-джерел і стрічки відкриттів.
 

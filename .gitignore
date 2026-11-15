@@ -11,3 +11,4 @@ src-tauri/binaries
 reports/ui/
 reports/qa-report.json
 reports/fix-report.md
+.codegraph/
