@@ -1,6 +1,6 @@
 [package]
 name = "skillhub-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Консольний та MCP-інтерфейс Skill Hub"
 edition = "2021"
 rust-version = "1.77"
