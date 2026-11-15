@@ -1,5 +1,7 @@
 # Skill Hub
 
+[![CI](https://github.com/k0valyk/skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/k0valyk/skill-hub/actions/workflows/ci.yml)
+
 Локальна бібліотека скілів, плагінів, агентів і MCP-серверів для OpenCode — з аналізом GitHub-посилань, підключенням у один клік і власним MCP-сервером, щоб агент бачив **короткі описи**, а повний текст читав лише за потреби.
 
 Windows-first десктоп: **Tauri 2 + Rust** (уся робота з диском, git, HTTP і секретами) та **React 19 + TypeScript + Vite + Tailwind 4 + Framer Motion + Lucide** (інтерфейс).
@@ -142,7 +144,7 @@ Documents/SkillHub/
 
 - **Корінь бібліотеки** — будь-яка папка; за замовчуванням `Documents/SkillHub`.
 - **DeepSeek** — ключ зберігається у Windows Credential Manager (сервіс `SkillHub`). Без ключа описи генеруються правилами.
-- **GitHub** — OAuth App з увімкненим **Device Flow**: встав `Client ID` у налаштуваннях і натисни «Увійти через GitHub». Альтернатива — personal access token зі scope `repo`.
+- **GitHub** — OAuth App з увімкненим **Device Flow**: встав `Client ID` у налаштуваннях і натисни «Увійти через GitHub». Альтернатива — personal access token зі scope `repo` (стабільніше для постійної роботи). Якщо в OAuth App увімкнено «Expire user access tokens», токен Device Flow живе ~8 годин і після цього потрібно увійти знову — застосунок поки не оновлює його автоматично.
 - **Ліміт контексту** — повзунок у налаштуваннях; смуга бюджету показує, скільки описів уже зайнято.
 
 Змінні середовища для тестів і CI:
@@ -167,6 +169,12 @@ Documents/SkillHub/
 
 ## Стан проєкту
 
-Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` і `cargo test`. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
+Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` (17 тестів) і `cargo test` (37 тестів). Перевірено наживо: аналіз реального репозиторію з DeepSeek, кеш описів, публікація приватного репо, бекап бібліотеки, `check-updates`, MCP over stdio, junction-підключення та інсталятори MSI/NSIS. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Що потрібно налаштувати вручну: `GitHub OAuth Client ID` (для Device Flow) і ключ DeepSeek (для AI-описів). Усе інше працює локально без мережі, окрім GitHub-джерел і стрічки відкриттів.
+Що потрібно налаштувати вручну: `GitHub OAuth Client ID` або PAT (для GitHub-функцій) і ключ DeepSeek (для AI-описів). Усе інше працює локально без мережі, окрім GitHub-джерел і стрічки відкриттів.
+
+---
+
+## Ліцензія
+
+MIT — див. [LICENSE](LICENSE).
