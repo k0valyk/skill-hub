@@ -583,10 +583,10 @@ pub fn sync(path: &Path, token: Option<&str>) -> Result<ProjectInfo> {
 }
 
 /// Резервна копія бібліотеки в приватний репозиторій через git work-tree.
-pub async fn backup_library(root: &Path, gh: &GitHub, repo_name: &str) -> Result<String> {
+fn ensure_backup_repo(root: &Path) -> Result<PathBuf> {
     let backup_git = root.join(".skillhub/backup-git");
     std::fs::create_dir_all(&backup_git)?;
-    if !backup_git.join("HEAD").exists() {
+    if !backup_git.join(".git").exists() {
         let out = run_git(&backup_git, ["init"])?;
         if !out.status.success() {
             return Err(anyhow!(
@@ -594,12 +594,24 @@ pub async fn backup_library(root: &Path, gh: &GitHub, repo_name: &str) -> Result
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
-        let _ = run_git(&backup_git, ["config", "core.worktree", "../../library"]);
-        let exclude = backup_git.join("info").join("exclude");
+        // core.worktree рахується від батьківської теки git-каталогу, тому
+        // `../../library` вказував за межі бібліотеки. Абсолютний шлях надійніший.
+        let worktree = root.join("library");
+        std::fs::create_dir_all(&worktree)?;
+        let _ = run_git(
+            &backup_git,
+            ["config", "core.worktree", &worktree.to_string_lossy()],
+        );
+        let exclude = backup_git.join(".git").join("info").join("exclude");
         std::fs::create_dir_all(exclude.parent().unwrap_or(&backup_git))?;
         let _ = std::fs::write(exclude, "*.db\n*.tmp\n*.log\n");
         let _ = run_git(&backup_git, ["checkout", "-b", "main"]);
     }
+    Ok(backup_git)
+}
+
+pub async fn backup_library(root: &Path, gh: &GitHub, repo_name: &str) -> Result<String> {
+    let backup_git = ensure_backup_repo(root)?;
     let _ = run_git(&backup_git, ["add", "-A"]);
     let message = format!("chore: library backup {}", now_iso());
     let _ = run_git(
@@ -721,5 +733,21 @@ mod tests {
         );
         let info = status(tmp.path());
         assert_eq!(info.status, "clean");
+    }
+
+    #[test]
+    fn backup_worktree_is_library() {
+        let tmp = tempfile::tempdir().unwrap();
+        crate::settings::ensure_dirs(tmp.path()).unwrap();
+        let git_dir = ensure_backup_repo(tmp.path()).unwrap();
+        let out = run_git(&git_dir, ["rev-parse", "--show-toplevel"]).unwrap();
+        assert!(
+            out.status.success(),
+            "git не бачить worktree: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let expected = tmp.path().join("library").canonicalize().unwrap();
+        assert_eq!(PathBuf::from(top).canonicalize().unwrap(), expected);
     }
 }
