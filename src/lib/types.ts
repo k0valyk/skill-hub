@@ -131,6 +131,7 @@ export interface Settings {
   accent: string;
   language: "uk" | "en";
   deepseekModel: string;
+  agentModel: string;
   contextBudget: number;
   autoCheckUpdates: boolean;
   lastUpdateCheck?: string | null;

@@ -634,6 +634,7 @@ function AgentDrawer({
   const cancelAgentTask = useApp((state) => state.cancelAgentTask);
   const loadAgentTasks = useApp((state) => state.loadAgentTasks);
   const openPath = useApp((state) => state.openPath);
+  const defaultModel = useApp((state) => state.settings?.agentModel ?? "");
 
   const [description, setDescription] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -792,7 +793,7 @@ function AgentDrawer({
 
               <section className="grid grid-cols-2 gap-2 text-[11px]">
                 <Meta label={t("agents.techName")} value={agent.techName} mono />
-                <Meta label={t("agents.model")} value={agent.model || t("agents.noModel")} mono />
+                <Meta label={t("agents.model")} value={agent.model || defaultModel || t("agents.noModel")} mono />
                 <Meta label={t("agents.steps")} value={agent.steps ? String(agent.steps) : "—"} />
                 <Meta label={t("agents.tokens")} value={formatNumber(agent.bodyTokens)} />
                 <Meta label={t("agents.updated")} value={relativeDate(agent.updatedAt, lang)} />
@@ -1079,6 +1080,7 @@ function AgentCreateModal({
   const runAgentTask = useApp((state) => state.runAgentTask);
   const chooseFolder = useApp((state) => state.chooseFolder);
   const pushToast = useApp((state) => state.pushToast);
+  const defaultModel = useApp((state) => state.settings?.agentModel ?? "");
 
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -1098,7 +1100,7 @@ function AgentCreateModal({
     setDisplayName("");
     setDescription("");
     setMode("subagent");
-    setModel("");
+    setModel(defaultModel);
     setTemplate("");
     setBody("");
     setScope("global");

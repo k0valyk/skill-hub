@@ -10,6 +10,7 @@ import {
   KeyRound,
   Loader2,
   LogOut,
+  Bot,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -48,6 +49,8 @@ export function Settings() {
   const openUrl = useApp((state) => state.openUrl);
   const device = useApp((state) => state.device);
   const pushToast = useApp((state) => state.pushToast);
+  const agentModels = useApp((state) => state.agentModels);
+  const loadAgentModels = useApp((state) => state.loadAgentModels);
 
   const [draft, setDraft] = useState<SettingsType | null>(settings);
   const [deepseekKey, setDeepseekKey] = useState("");
@@ -57,6 +60,10 @@ export function Settings() {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => setDraft(settings), [settings]);
+
+  useEffect(() => {
+    void loadAgentModels();
+  }, [loadAgentModels]);
 
   useEffect(
     () => () => {
@@ -235,6 +242,30 @@ export function Settings() {
               </div>
             ) : null}
           </div>
+        </Section>
+
+        <Section
+          title={t("settings.agentsSection")}
+          hint={t("settings.agentsHint")}
+          icon={<Bot size={14} />}
+        >
+          <Field label={t("settings.agentModel")} hint={t("settings.agentModelHint")}>
+            <select
+              className="input h-[32px] !py-0 text-[11.5px]"
+              value={draft.agentModel}
+              onChange={(event) => void persist({ agentModel: event.target.value })}
+            >
+              <option value="">{t("settings.inheritModel")}</option>
+              {agentModels.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+              {draft.agentModel && !agentModels.includes(draft.agentModel) ? (
+                <option value={draft.agentModel}>{draft.agentModel}</option>
+              ) : null}
+            </select>
+          </Field>
         </Section>
 
         <Section

@@ -38,6 +38,7 @@ Windows-first десктоп: **Tauri 2 + Rust** (уся робота з дис�
 - **Створення** — локально з шаблону `agent-templates` або через агента `agent-factory`; є імпорт/експорт Markdown-файлу.
 - **Вигляд** — сітка з анімаціями або карта зв'язків «агент → папки/скіли», пошук і фільтри за статусом, папкою та скілом.
 - **OpenCode CLI** визначається автоматично з OpenCode Desktop (`%APPDATA%\\ai.opencode.desktop\\cli\\*`), з PATH або через `SKILLHUB_OPENCODE_CLI`.
+- **Модель за замовчуванням** для агентів без власної моделі задається в Налаштуваннях (список береться з `opencode models`); на цій машині підключено `deepseek/deepseek-flash` через API-ключ DeepSeek.
 
 ---
 
@@ -186,7 +187,7 @@ Documents/SkillHub/
 
 ## Стан проєкту
 
-Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` (17 тестів) і `cargo test` (42 тести). Перевірено наживо: аналіз реального репозиторію з DeepSeek, кеш описів, публікація приватного репо, бекап бібліотеки, `check-updates`, MCP over stdio, junction-підключення, розділ агентів і запуск завдань через OpenCode CLI (на реальному CLI та з тестовим CLI-заглушкою), інсталятори MSI/NSIS. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
+Frontend і бекенд зібрані й проходять `tsc`, `vite build`, `vitest` (17 тестів) і `cargo test` (43 тести). Перевірено наживо: аналіз реального репозиторію з DeepSeek, кеш описів, публікація приватного репо, бекап бібліотеки, `check-updates`, MCP over stdio, junction-підключення, розділ агентів і запуск завдань через OpenCode CLI (на реальному CLI та з тестовим CLI-заглушкою), інсталятори MSI/NSIS. Деталі архітектури — у [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Що потрібно налаштувати вручну: `GitHub OAuth Client ID` або PAT (для GitHub-функцій) і ключ DeepSeek (для AI-описів). Усе інше працює локально без мережі, окрім GitHub-джерел і стрічки відкриттів.
 

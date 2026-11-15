@@ -340,6 +340,21 @@ pub fn default_icon(seed: &str) -> String {
     format!("{emoji}|{color}")
 }
 
+pub fn effective_model(agent_model: Option<&str>, default_model: &str) -> Option<String> {
+    agent_model
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            let model = default_model.trim();
+            if model.is_empty() {
+                None
+            } else {
+                Some(model.to_string())
+            }
+        })
+}
+
 fn short_hash(value: &str) -> String {
     sha256_hex(value.as_bytes())[..8].to_string()
 }
@@ -1448,6 +1463,23 @@ mod tests {
         let second = default_icon("g:agent-factory");
         assert_eq!(first, second);
         assert!(first.contains('|'));
+    }
+
+    #[test]
+    fn effective_model_prefers_agent_then_default() {
+        assert_eq!(
+            effective_model(Some("deepseek/deepseek-chat"), "deepseek/deepseek-flash"),
+            Some("deepseek/deepseek-chat".into())
+        );
+        assert_eq!(
+            effective_model(None, "deepseek/deepseek-flash"),
+            Some("deepseek/deepseek-flash".into())
+        );
+        assert_eq!(
+            effective_model(Some("  "), "deepseek/deepseek-flash"),
+            Some("deepseek/deepseek-flash".into())
+        );
+        assert_eq!(effective_model(None, ""), None);
     }
 
     #[test]

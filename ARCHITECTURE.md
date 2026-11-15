@@ -150,7 +150,7 @@ Discovery:
 Проєкти беруться з `projects/`, `project_dir` і всіх прив'язок у `agent_projects`; вкладені теки дають ID `team/reviewer`. Вимкнений агент лежить як `<name>.md.disabled` — OpenCode його не бачить, а SkillHub показує картку зі статусом «вимкнений».
 
 - **Джерело правди — файл.** Frontmatter парситься вручну: V2 `description/mode/model/color/permissions/steps/hidden` плюс legacy `tools`/`permission`. Метадані (людська назва, іконка, теги, авто-дозволи) живуть у `agents_meta` за шляхом; втрата БД не ламає агентів.
-- **Запуск завдання**: `opencode run --agent <key> --format json [--auto] --title "Skill Hub · <key>" "<prompt>"` з `cwd` вибраного проєкту. CLI шукається в OpenCode Desktop, PATH або `SKILLHUB_OPENCODE_CLI`; `.cmd/.bat` обгортаються в `cmd /C`.
+- **Запуск завдання**: `opencode run --agent <key> --format json [--auto] [--model <model>] --title "Skill Hub · <key>" "<prompt>"` з `cwd` вибраного проєкту. Модель береться з агента, інакше з `settings.agentModel` (список — `opencode models`). CLI шукається в OpenCode Desktop, PATH або `SKILLHUB_OPENCODE_CLI`; `.cmd/.bat` обгортаються в `cmd /C`.
 - **Потік подій** читається построчно: `text` → вивід і рядок активності, `tool_use` → «🔧 tool», `step_finish` → токени/вартість, `error` → текст помилки, `permission` → статус «чекає підтвердження». Події летять у UI (`agent:activity`, `agent:finished`), а підсумок пишеться в `agent_tasks`.
 - **Скасування** — `JoinHandle::abort()` + `kill_on_drop`, запис у БД отримує статус `cancelled`.
 - **Скіли агента** зберігаються в `agent_skills` і синхронізуються у видимий блок у тілі `.md` між `<!-- skillhub:skills:start/end -->`, щоб агент знав, що є в бібліотеці, і завантажував текст ліниво через MCP.

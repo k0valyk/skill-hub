@@ -1094,9 +1094,20 @@ pub async fn agent_tasks(
 
 #[tauri::command]
 pub async fn agent_create(
-    input: AgentCreateInput,
+    mut input: AgentCreateInput,
     state: tauri::State<'_, AppState>,
 ) -> Result<Agent, String> {
+    if input
+        .model
+        .as_deref()
+        .map(|model| model.trim().is_empty())
+        .unwrap_or(true)
+    {
+        let model = state.settings.lock().unwrap().agent_model.clone();
+        if !model.trim().is_empty() {
+            input.model = Some(model);
+        }
+    }
     let root = state.root();
     let db = state.db.lock().unwrap();
     crate::agents::create(&db, &root, input).map_err(|e| humanize(&e))
@@ -1256,6 +1267,29 @@ pub async fn agents_runtime() -> Result<Option<String>, String> {
     Ok(crate::agents::opencode_cli().map(|path| path.to_string_lossy().to_string()))
 }
 
+#[tauri::command]
+pub async fn opencode_models() -> Result<Vec<String>, String> {
+    let cli = crate::agents::opencode_cli()
+        .ok_or_else(|| "OpenCode CLI не знайдено.".to_string())?;
+    let output = opencode_command(&cli)
+        .arg("models")
+        .output()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    let mut models: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains('/'))
+        .map(str::to_string)
+        .collect();
+    models.sort();
+    models.dedup();
+    Ok(models)
+}
+
 fn finalize_agent_task(
     db: &Arc<Mutex<Db>>,
     running: &Arc<Mutex<HashMap<String, RunningInfo>>>,
@@ -1349,6 +1383,8 @@ pub async fn agent_run_task(
         "OpenCode CLI не знайдено. Увімкни OpenCode Desktop або задай SKILLHUB_OPENCODE_CLI."
             .to_string()
     })?;
+    let default_model = state.settings.lock().unwrap().agent_model.clone();
+    let model_override = crate::agents::effective_model(agent.model.as_deref(), &default_model);
     let cwd = match project.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
         Some(path) => {
             let path = PathBuf::from(path);
@@ -1422,6 +1458,7 @@ pub async fn agent_run_task(
     let task_prompt = prompt.clone();
     let cwd_clone = cwd.clone();
     let cli_clone = cli.clone();
+    let model_clone = model_override.clone();
 
     let handle = tokio::spawn(async move {
         let started = std::time::Instant::now();
@@ -1436,6 +1473,9 @@ pub async fn agent_run_task(
             .arg(format!("Skill Hub · {agent_key}"));
         if auto {
             command.arg("--auto");
+        }
+        if let Some(model) = &model_clone {
+            command.arg("--model").arg(model);
         }
         command
             .arg(&task_prompt)

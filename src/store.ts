@@ -91,6 +91,7 @@ interface AppStore {
   agentTemplates: AgentTemplate[];
   agentActivity: Record<string, { taskId: string; activity: string; waiting: boolean }>;
   agentRuntime: string | null;
+  agentModels: string[];
 
   toasts: Toast[];
 
@@ -141,6 +142,7 @@ interface AppStore {
   loadAgents: () => Promise<void>;
   loadAgentTemplates: () => Promise<void>;
   loadAgentRuntime: () => Promise<void>;
+  loadAgentModels: () => Promise<void>;
   createAgent: (input: AgentCreateInput) => Promise<Agent | null>;
   updateAgent: (id: string, patch: AgentPatch) => Promise<boolean>;
   toggleAgent: (id: string, enabled: boolean) => Promise<boolean>;
@@ -254,6 +256,7 @@ export const useApp = create<AppStore>((set, get) => {
     agentTemplates: [],
     agentActivity: {},
     agentRuntime: null,
+    agentModels: [],
 
     toasts: [],
 
@@ -763,6 +766,15 @@ export const useApp = create<AppStore>((set, get) => {
         set({ agentRuntime });
       } catch {
         set({ agentRuntime: null });
+      }
+    },
+
+    loadAgentModels: async () => {
+      try {
+        const agentModels = await call<string[]>("opencode_models");
+        set({ agentModels });
+      } catch {
+        set({ agentModels: [] });
       }
     },
 

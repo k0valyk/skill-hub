@@ -286,6 +286,7 @@ let settings: Settings = {
   accent: "violet",
   language: "uk",
   deepseekModel: "deepseek-chat",
+  agentModel: "deepseek/deepseek-flash",
   contextBudget: 6000,
   autoCheckUpdates: true,
   lastUpdateCheck: iso(2),
@@ -702,6 +703,12 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
       ] as T;
     case "agents_runtime":
       return "C:\\Users\\demo\\AppData\\Roaming\\ai.opencode.desktop\\cli\\2.2.7-x64\\opencode-cli.exe" as T;
+    case "opencode_models":
+      return [
+        "deepseek/deepseek-flash",
+        "deepseek/deepseek-v4-pro",
+        "opencode/glm-5.3-flash-free",
+      ] as T;
     case "agent_create": {
       const input = (args?.input ?? {}) as Record<string, unknown>;
       const name = String(input.name ?? "agent");
