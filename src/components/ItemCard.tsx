@@ -102,7 +102,7 @@ function ItemCardBase({ item, index }: { item: Item; index: number }) {
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--line)] pt-2.5">
         <div className="flex flex-col gap-0.5">
           <span className="text-[10.5px] tabular-nums text-[var(--faint)]">
-            {t("card.tokens", { n: item.tokensEst })} · {formatBytes(item.sizeBytes)}
+            {t("card.tokens", { n: item.tokensEst })} · {formatBytes(item.sizeBytes, lang)}
           </span>
           <RiskDot level={item.risk.level} />
         </div>

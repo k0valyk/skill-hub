@@ -37,7 +37,6 @@ export function Settings() {
   const setSecret = useApp((state) => state.setSecret);
   const clearSecret = useApp((state) => state.clearSecret);
   const startGithub = useApp((state) => state.startGithub);
-  const pollGithub = useApp((state) => state.pollGithub);
   const logoutGithub = useApp((state) => state.logoutGithub);
   const connectOpencode = useApp((state) => state.connectOpencode);
   const chooseFolder = useApp((state) => state.chooseFolder);
@@ -45,9 +44,12 @@ export function Settings() {
   const importLibrary = useApp((state) => state.importLibrary);
   const backupLibrary = useApp((state) => state.backupLibrary);
   const refreshItems = useApp((state) => state.refreshItems);
+  const scanning = useApp((state) => state.scanning);
   const openPath = useApp((state) => state.openPath);
   const openUrl = useApp((state) => state.openUrl);
   const device = useApp((state) => state.device);
+  const deviceWaiting = useApp((state) => state.deviceWaiting);
+  const stopGithubWait = useApp((state) => state.stopGithubWait);
   const pushToast = useApp((state) => state.pushToast);
   const agentModels = useApp((state) => state.agentModels);
   const loadAgentModels = useApp((state) => state.loadAgentModels);
@@ -57,9 +59,8 @@ export function Settings() {
   const [draft, setDraft] = useState<SettingsType | null>(settings);
   const [deepseekKey, setDeepseekKey] = useState("");
   const [token, setToken] = useState("");
-  const [deviceWaiting, setDeviceWaiting] = useState(false);
   const [copied, setCopied] = useState(false);
-  const timerRef = useRef<number | null>(null);
+  const budgetTimerRef = useRef<number | null>(null);
 
   useEffect(() => setDraft(settings), [settings]);
 
@@ -70,7 +71,7 @@ export function Settings() {
 
   useEffect(
     () => () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
+      if (budgetTimerRef.current) window.clearTimeout(budgetTimerRef.current);
     },
     [],
   );
@@ -96,19 +97,24 @@ export function Settings() {
   };
 
   const beginDevice = async () => {
-    const started = await startGithub();
-    if (!started) return;
-    setDeviceWaiting(true);
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    const interval = Math.max(started.interval, 5) * 1000;
-    timerRef.current = window.setInterval(async () => {
-      const result = await pollGithub();
-      if (!result) return;
-      if (result.state !== "pending" && result.state !== "slow_down") {
-        if (timerRef.current) window.clearInterval(timerRef.current);
-        setDeviceWaiting(false);
-      }
-    }, interval);
+    await startGithub();
+  };
+
+  const queueBudget = (value: number) => {
+    const next = { ...draft, contextBudget: value };
+    setDraft(next);
+    if (budgetTimerRef.current) window.clearTimeout(budgetTimerRef.current);
+    budgetTimerRef.current = window.setTimeout(() => {
+      budgetTimerRef.current = null;
+      void saveSettings(next);
+    }, 450);
+  };
+
+  const flushBudget = () => {
+    if (!budgetTimerRef.current) return;
+    window.clearTimeout(budgetTimerRef.current);
+    budgetTimerRef.current = null;
+    void saveSettings(draft);
   };
 
   const copyCode = async () => {
@@ -145,7 +151,7 @@ export function Settings() {
                     className={cn(
                       "flex-1 rounded-[8px] px-2 py-1.5 text-[11.5px] font-medium transition-colors",
                       draft.theme === theme
-                        ? "bg-white/[0.08] text-[var(--text)]"
+                        ? "bg-[var(--active)] text-[var(--text)]"
                         : "text-[var(--faint)] hover:text-[var(--text)]",
                     )}
                   >
@@ -164,7 +170,7 @@ export function Settings() {
                     className={cn(
                       "flex-1 rounded-[8px] px-2 py-1.5 text-[11.5px] font-medium transition-colors",
                       draft.language === language
-                        ? "bg-white/[0.08] text-[var(--text)]"
+                        ? "bg-[var(--active)] text-[var(--text)]"
                         : "text-[var(--faint)] hover:text-[var(--text)]",
                     )}
                   >
@@ -216,7 +222,7 @@ export function Settings() {
             <div className="flex items-center justify-between">
               <span className="label">{t("settings.budgetThreshold")}</span>
               <span className="text-[12px] tabular-nums text-[var(--muted)]">
-                {formatNumber(draft.contextBudget)} {t("common.tokens")}
+                {formatNumber(draft.contextBudget, draft.language)} {t("common.tokens")}
               </span>
             </div>
             <input
@@ -225,8 +231,10 @@ export function Settings() {
               max={60000}
               step={500}
               value={draft.contextBudget}
-              onChange={(event) => patch({ contextBudget: Number(event.target.value) })}
-              onMouseUp={() => void saveSettings(draft)}
+              onChange={(event) => queueBudget(Number(event.target.value))}
+              onPointerUp={flushBudget}
+              onKeyUp={flushBudget}
+              onBlur={flushBudget}
               className="w-full accent-[var(--accent)]"
             />
             {budget ? (
@@ -356,7 +364,10 @@ export function Settings() {
             <ShieldCheck size={12} style={{ color: secrets.deepseekKey ? "var(--ok)" : "var(--faint)" }} />
             {secrets.deepseekKey ? t("settings.keySaved") : t("settings.keyMissing")}
             <span className="ml-auto tabular-nums">
-              {t("settings.tokensUsed", { in: formatNumber(tokensIn), out: formatNumber(tokensOut) })}
+              {t("settings.tokensUsed", {
+                in: formatNumber(tokensIn, draft.language),
+                out: formatNumber(tokensOut, draft.language),
+              })}
             </span>
           </div>
         </Section>
@@ -396,15 +407,23 @@ export function Settings() {
                 placeholder="Iv1.…"
               />
             </Field>
-            <div className="flex items-end">
+            <div className="flex flex-col justify-end gap-1.5">
               <button
                 className="btn w-full !py-2 text-[12px]"
                 disabled={deviceWaiting || !draft.githubClientId.trim()}
                 onClick={() => void beginDevice()}
               >
-                {deviceWaiting ? <Loader2 size={13} className="spin-slow" /> : <Github size={13} />}
+                {deviceWaiting ? <Loader2 size={13} className="spin-fast" /> : <Github size={13} />}
                 {deviceWaiting ? t("settings.deviceWaiting") : t("settings.connectGithub")}
               </button>
+              {deviceWaiting ? (
+                <button
+                  className="btn w-full !py-2 text-[12px]"
+                  onClick={() => stopGithubWait()}
+                >
+                  {t("settings.deviceCancel")}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -523,9 +542,13 @@ export function Settings() {
               <Github size={12} />
               {t("settings.backupLibrary")}
             </button>
-            <button className="btn !py-1.5 text-[11.5px]" onClick={() => void refreshItems()}>
-              <RefreshCw size={12} />
-              {t("settings.rescan")}
+            <button
+              className="btn !py-1.5 text-[11.5px]"
+              disabled={scanning}
+              onClick={() => void refreshItems()}
+            >
+              <RefreshCw size={12} className={scanning ? "spin-fast" : undefined} />
+              {scanning ? t("top.scanning") : t("settings.rescan")}
             </button>
             <button className="btn !py-1.5 text-[11.5px]" onClick={() => void openPath(draft.root)}>
               <FolderOpen size={12} />
@@ -545,7 +568,7 @@ export function Settings() {
 
         {dirty ? (
           <div className="sticky bottom-2 flex items-center justify-between rounded-[12px] border border-[var(--accent)]/35 bg-[var(--accent-soft)] px-3.5 py-2.5 backdrop-blur">
-            <span className="text-[11.5px]">{t("settings.saved")}?</span>
+            <span className="text-[11.5px]">{t("settings.unsavedPrompt")}</span>
             <div className="flex gap-2">
               <button className="btn !py-1 text-[11px]" onClick={() => setDraft(settings)}>
                 {t("common.cancel")}

@@ -366,6 +366,43 @@ function budget(): Budget {
 
 const delay = (ms = 420) => new Promise((resolve) => setTimeout(resolve, ms));
 
+let qaReportCalls = 0;
+
+function mockPreview(url: string): Preview {
+  const repo = url.split("/").filter(Boolean).pop() ?? "demo";
+  const id = repo.replace(/\.git$/, "").toLowerCase();
+  const kind = kindFor(id);
+  return {
+    url: `https://github.com/demo/${id}`,
+    kind,
+    name: id.split("-").map((p) => p[0]?.toUpperCase() + p.slice(1)).join(" "),
+    owner: "demo",
+    repo: id,
+    branch: "main",
+    subPath: null,
+    subIsFile: false,
+    commit: "mockabc123",
+    summaryUk: summaries[id]?.[0] ??
+      "Це корисний інструмент для OpenCode. Він додає готові інструкції та шаблони для типової роботи. Знадобиться, коли хочеться менше рутини й більше однакових рішень.",
+    summaryEn: summaries[id]?.[1] ?? "A useful OpenCode tool with ready-made instructions and templates.",
+    tags: [kind, "workflow"],
+    license: "MIT",
+    stars: 240,
+    pushedAt: iso(6),
+    sizeBytes: 42_000,
+    defaultFolder: kind === "mcp" ? "mcp" : `${kind}s`,
+    defaultId: id,
+    risk: { level: "clean", findings: [], scannedAt: iso(0) },
+    warnings: [],
+    descriptionSource: "ai",
+    tokensUsed: 812,
+    cached: false,
+    fileCount: 14,
+    isGist: false,
+    isAwesome: false,
+  };
+}
+
 export async function mockCall<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   switch (command) {
     case "app_bootstrap": {
@@ -389,44 +426,21 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
       return items as T;
     case "preview_link": {
       await delay(900);
-      const url = String(args?.url ?? "");
-      const repo = url.split("/").filter(Boolean).pop() ?? "demo";
-      const id = repo.replace(/\.git$/, "").toLowerCase();
-      const kind = kindFor(id);
-      const preview: Preview = {
-        url: `https://github.com/demo/${id}`,
-        kind,
-        name: id.split("-").map((p) => p[0]?.toUpperCase() + p.slice(1)).join(" "),
-        owner: "demo",
-        repo: id,
-        branch: "main",
-        subPath: null,
-        subIsFile: false,
-        commit: "mockabc123",
-        summaryUk: summaries[id]?.[0] ??
-          "Це корисний інструмент для OpenCode. Він додає готові інструкції та шаблони для типової роботи. Знадобиться, коли хочеться менше рутини й більше однакових рішень.",
-        summaryEn: summaries[id]?.[1] ?? "A useful OpenCode tool with ready-made instructions and templates.",
-        tags: [kind, "workflow"],
-        license: "MIT",
-        stars: 240,
-        pushedAt: iso(6),
-        sizeBytes: 42_000,
-        defaultFolder: kind === "mcp" ? "mcp" : `${kind}s`,
-        defaultId: id,
-        risk: { level: "clean", findings: [], scannedAt: iso(0) },
-        warnings: [],
-        descriptionSource: "ai",
-        tokensUsed: 812,
-        cached: false,
-        fileCount: 14,
-        isGist: false,
-        isAwesome: false,
-      };
-      return preview as T;
+      return mockPreview(String(args?.url ?? "")) as T;
     }
     case "preview_batch": {
       await delay(1200);
-      return { previews: [], failures: [] } as T;
+      const input = String(args?.input ?? "");
+      const urls = input
+        .split(/[\s,]+/)
+        .map((value) => value.trim())
+        .filter((value) => /^https?:\/\//i.test(value));
+      const unique = [...new Set(urls)];
+      const previews = unique.map((url) => mockPreview(url));
+      return {
+        previews,
+        failures: unique.length === 0 ? [{ url: input.trim(), error: "Не знайдено посилань на GitHub" }] : [],
+      } as T;
     }
     case "install_preview": {
       await delay(1400);
@@ -544,6 +558,20 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
     }
     case "clear_secret":
       return { githubToken: false, deepseekKey: false } as T;
+    case "github_device_start":
+      await delay(300);
+      return {
+        deviceCode: "mock-device-code",
+        userCode: "ABCD-1234",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 900,
+        interval: 5,
+      } as T;
+    case "github_device_poll":
+      await delay(250);
+      return { state: "pending" } as T;
+    case "github_logout":
+      return { githubToken: false, deepseekKey: true } as T;
     case "github_repos":
       return [
         {
@@ -856,8 +884,33 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
       );
       return mockAgents.find((agent) => agent.id === id) as T;
     }
-    case "agent_choose_icon":
-      return null as T;
+    case "agent_choose_icon": {
+      const id = String(args?.id ?? "");
+      const agent = mockAgents.find((entry) => entry.id === id);
+      if (!agent) return null as T;
+      const palettes = ["🧩", "🤖", "🧠", "🛠️", "🛰️"];
+      const [glyph, color = "#8b7cff"] = agent.icon.split("|");
+      const next = palettes[(palettes.indexOf(glyph) + 1) % palettes.length];
+      mockAgents = mockAgents.map((entry) =>
+        entry.id === id ? { ...entry, icon: `${next}|${color}` } : entry,
+      );
+      return mockAgents.find((entry) => entry.id === id) as T;
+    }
+    case "agent_qa_report": {
+      await delay(600);
+      qaReportCalls += 1;
+      const hasIssues = qaReportCalls % 2 === 1;
+      return {
+        path: `${String(args?.project ?? "")}\\reports\\qa-report.json`,
+        exists: true,
+        total: hasIssues ? 3 : 0,
+        openCritical: 0,
+        openHigh: hasIssues ? 1 : 0,
+        openMedium: hasIssues ? 2 : 0,
+        openLow: 0,
+        generatedAt: new Date().toISOString(),
+      } as T;
+    }
     case "agent_export":
       return "C:\\Users\\demo\\Documents\\agent.md" as T;
     case "agent_import":

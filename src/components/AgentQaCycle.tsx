@@ -35,6 +35,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [report, setReport] = useState<QaReportSummary | null>(null);
   const [currentAgent, setCurrentAgent] = useState<string | null>(null);
+  const [doneStages, setDoneStages] = useState(0);
   const cancelRef = useRef(false);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
     setLogs([]);
     setReport(null);
     setCurrentAgent(null);
+    setDoneStages(0);
     cancelRef.current = false;
   }, [open, qa?.id, fixer?.id, settings?.projectDir]);
 
@@ -90,6 +92,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
     setRunning(true);
     setLogs([]);
     setReport(null);
+    setDoneStages(0);
     let lastReport: QaReportSummary | null = null;
     let outcome: "done" | "error" | "max" = "max";
     try {
@@ -120,17 +123,18 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
           "ok",
         );
         setPhase("report");
+        setDoneStages((index - 1) * 2 + 1);
         lastReport = await readReport();
-        log(
-          `${t("qa.critical")}: ${lastReport.openCritical} · ${t("qa.high")}: ${lastReport.openHigh} · ${t("qa.medium")}: ${lastReport.openMedium} · ${t("qa.low")}: ${lastReport.openLow}`,
-          openIssues(lastReport) > 0 ? "error" : "ok",
-        );
         if (!lastReport.exists) {
           log(t("qa.reportMissing"), "error");
           setPhase("error");
           outcome = "error";
           break;
         }
+        log(
+          `${t("qa.critical")}: ${lastReport.openCritical} · ${t("qa.high")}: ${lastReport.openHigh} · ${t("qa.medium")}: ${lastReport.openMedium} · ${t("qa.low")}: ${lastReport.openLow}`,
+          openIssues(lastReport) > 0 ? "error" : "ok",
+        );
         if (openIssues(lastReport) === 0) {
           setPhase("done");
           log(t("qa.logDone"), "ok");
@@ -163,7 +167,14 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
           "ok",
         );
         setPhase("report");
+        setDoneStages(index * 2);
         lastReport = await readReport();
+        if (!lastReport.exists) {
+          log(t("qa.reportMissing"), "error");
+          setPhase("error");
+          outcome = "error";
+          break;
+        }
         log(
           `${t("qa.critical")}: ${lastReport.openCritical} · ${t("qa.high")}: ${lastReport.openHigh} · ${t("qa.medium")}: ${lastReport.openMedium} · ${t("qa.low")}: ${lastReport.openLow}`,
           openIssues(lastReport) > 0 ? "error" : "ok",
@@ -203,7 +214,14 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   const canStart = Boolean(qa && fixer && project.trim());
-  const progress = rounds > 0 ? Math.min(100, Math.round(((round - (phase === "done" ? 0 : 1)) / rounds) * 100)) : 0;
+  const totalStages = Math.max(1, rounds * 2);
+  const progress =
+    phase === "done"
+      ? 100
+      : Math.min(
+          99,
+          Math.max(running ? 6 : 0, Math.round((doneStages / totalStages) * 100)),
+        );
 
   return (
     <AnimatePresence>
@@ -286,7 +304,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="flex items-center gap-1.5">
                     {running ? (
-                      <Loader2 size={12} className="spin-slow" style={{ color: "var(--accent)" }} />
+                      <Loader2 size={12} className="spin-fast" style={{ color: "var(--accent)" }} />
                     ) : phase === "done" ? (
                       <Check size={12} style={{ color: "var(--ok)" }} />
                     ) : phase === "error" ? (
@@ -300,7 +318,7 @@ export function AgentQaCycle({ open, onClose }: { open: boolean; onClose: () => 
                     {round}/{rounds}
                   </span>
                 </div>
-                <div className="h-1 overflow-hidden rounded-full bg-white/8">
+                <div className="h-1 overflow-hidden rounded-full bg-[var(--track)]">
                   <motion.div
                     className="h-full rounded-full"
                     style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))" }}

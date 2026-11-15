@@ -144,6 +144,7 @@ const uk = {
 
   "detail.about": "Що це",
   "detail.whatItDoes": "Що робить",
+  "detail.howItWorks": "Як працює",
   "detail.whyUseful": "Чому знадобиться",
   "detail.tags": "Теги",
   "detail.notes": "Нотатки",
@@ -158,7 +159,7 @@ const uk = {
   "detail.path": "Шлях",
   "detail.tokensFull": "Повний текст",
   "detail.tokensShort": "Опис у контексті",
-  "detail.riskTitle": "Проверка безпеки",
+  "detail.riskTitle": "Перевірка безпеки",
   "detail.noFindings": "Підозрілих патернів не знайдено.",
   "detail.openSource": "Відкрити джерело",
   "detail.updateAvailable": "Є оновлення",
@@ -230,6 +231,7 @@ const uk = {
   "settings.deviceTitle": "Код для входу",
   "settings.deviceHint": "Введи цей код на github.com/login/device. Вікно браузера вже відкрите.",
   "settings.deviceWaiting": "Чекаю підтвердження…",
+  "settings.deviceCancel": "Скасувати вхід",
   "settings.deviceSuccess": "Готово, GitHub підключено.",
   "settings.deviceError": "Не вдалося підтвердити вхід",
   "settings.tokenFallback": "Або встав personal access token",
@@ -256,6 +258,7 @@ const uk = {
   "settings.gitVersion": "Git",
   "settings.appVersion": "Версія",
   "settings.saved": "Налаштування збережено",
+  "settings.unsavedPrompt": "Є незбережені зміни — зберегти?",
   "settings.exported": "Експортовано у {path}",
   "settings.imported": "Імпортовано {n} файлів",
   "settings.backupDone": "Бекап: {url}",
@@ -272,6 +275,8 @@ const uk = {
   "projects.noProjectsHint": "Створи папку в корені бібліотеки → projects/ або додай наявний проєкт.",
   "projects.openFolder": "Відкрити",
   "projects.publish": "Опублікувати",
+  "projects.create": "Новий проєкт",
+  "projects.created": "Проєкт створено",
   "projects.sync": "Синхронізувати",
   "projects.statusClean": "Чисто",
   "projects.statusChanges": "Є зміни",
@@ -330,6 +335,7 @@ const uk = {
   "discover.addToLibrary": "Додати",
   "discover.noFeed": "Стрічка порожня",
   "discover.noFeedHint": "Перевір інтернет або додай посилання вручну.",
+  "discover.loadFailed": "Не вдалося завантажити стрічку",
   "discover.stars": "{n} ★",
   "discover.updated": "Оновлено {date}",
   "discover.loadingFeed": "Збираю свіжі проєкти…",
@@ -569,6 +575,8 @@ const uk = {
   "error.offline": "Немає зв'язку з мережею",
   "error.githubLimit": "Перевищено ліміт GitHub API — увійди в GitHub",
   "error.noRoot": "Не вдалося створити папку бібліотеки",
+  "error.uiCrash": "Інтерфейс зупинився",
+  "error.reload": "Перезавантажити",
 } as const;
 
 type Dict = { [K in keyof typeof uk]: string };
@@ -717,6 +725,7 @@ const en: Dict = {
 
   "detail.about": "What it is",
   "detail.whatItDoes": "What it does",
+  "detail.howItWorks": "How it works",
   "detail.whyUseful": "Why it helps",
   "detail.tags": "Tags",
   "detail.notes": "Notes",
@@ -803,6 +812,7 @@ const en: Dict = {
   "settings.deviceTitle": "Login code",
   "settings.deviceHint": "Enter this code at github.com/login/device. The browser window is already open.",
   "settings.deviceWaiting": "Waiting for confirmation…",
+  "settings.deviceCancel": "Cancel sign-in",
   "settings.deviceSuccess": "GitHub connected.",
   "settings.deviceError": "Could not confirm sign-in",
   "settings.tokenFallback": "Or paste a personal access token",
@@ -829,6 +839,7 @@ const en: Dict = {
   "settings.gitVersion": "Git",
   "settings.appVersion": "Version",
   "settings.saved": "Settings saved",
+  "settings.unsavedPrompt": "You have unsaved changes — save?",
   "settings.exported": "Exported to {path}",
   "settings.imported": "Imported {n} files",
   "settings.backupDone": "Backup: {url}",
@@ -845,6 +856,8 @@ const en: Dict = {
   "projects.noProjectsHint": "Create a folder in the library root → projects/ or add an existing project.",
   "projects.openFolder": "Open",
   "projects.publish": "Publish",
+  "projects.create": "New project",
+  "projects.created": "Project created",
   "projects.sync": "Sync",
   "projects.statusClean": "Clean",
   "projects.statusChanges": "Changes",
@@ -903,6 +916,7 @@ const en: Dict = {
   "discover.addToLibrary": "Add",
   "discover.noFeed": "Feed is empty",
   "discover.noFeedHint": "Check your connection or paste a link manually.",
+  "discover.loadFailed": "Could not load the feed",
   "discover.stars": "{n} ★",
   "discover.updated": "Updated {date}",
   "discover.loadingFeed": "Collecting fresh projects…",
@@ -1142,6 +1156,8 @@ const en: Dict = {
   "error.offline": "No network connection",
   "error.githubLimit": "GitHub API rate limit — sign in to GitHub",
   "error.noRoot": "Could not create the library folder",
+  "error.uiCrash": "The interface stopped",
+  "error.reload": "Reload",
 };
 
 export const dictionaries: Record<Lang, Dict> = { uk, en };

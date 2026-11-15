@@ -4,7 +4,7 @@ import { Check, Search, X } from "lucide-react";
 import type { Profile } from "@/lib/types";
 import { cn, itemSummary } from "@/lib/utils";
 import { useApp, useT } from "@/store";
-import { KindIcon } from "./common";
+import { KindIcon, useEscape, useFocusTrap } from "./common";
 
 export function ProfileEditor({
   open,
@@ -26,6 +26,9 @@ export function ProfileEditor({
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEscape(open, onClose);
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +80,10 @@ export function ProfileEditor({
         >
           <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
           <motion.div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("profiles.title")}
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.985 }}
@@ -145,7 +152,7 @@ export function ProfileEditor({
                       onClick={() => toggle(item.id)}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left transition-colors",
-                        active ? "bg-[var(--accent-soft)]" : "hover:bg-white/[0.04]",
+                        active ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--hover)]",
                       )}
                     >
                       <span

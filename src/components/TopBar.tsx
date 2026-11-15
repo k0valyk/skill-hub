@@ -35,7 +35,7 @@ export function TopBar() {
   const analyzeBatch = useApp((state) => state.analyzeBatch);
   const refreshItems = useApp((state) => state.refreshItems);
   const itemsCount = useApp((state) => state.items.length);
-  const busy = useApp((state) => state.busy);
+  const scanning = useApp((state) => state.scanning);
   const addFocus = useApp((state) => state.addFocus);
   const setPalette = useApp((state) => state.setPalette);
 
@@ -213,7 +213,7 @@ export function TopBar() {
                 className={cn(
                   "rounded-[8px] p-1.5 transition-colors",
                   layout === "grid"
-                    ? "bg-white/8 text-[var(--text)]"
+                    ? "bg-[var(--active)] text-[var(--text)]"
                     : "text-[var(--faint)] hover:text-[var(--text)]",
                 )}
                 title={t("top.grid")}
@@ -225,7 +225,7 @@ export function TopBar() {
                 className={cn(
                   "rounded-[8px] p-1.5 transition-colors",
                   layout === "list"
-                    ? "bg-white/8 text-[var(--text)]"
+                    ? "bg-[var(--active)] text-[var(--text)]"
                     : "text-[var(--faint)] hover:text-[var(--text)]",
                 )}
                 title={t("top.list")}
@@ -235,12 +235,12 @@ export function TopBar() {
             </div>
             <button
               onClick={() => void refreshItems()}
-              disabled={busy}
+              disabled={scanning}
               className="btn !h-[30px] !px-2.5 !py-0 text-[11.5px]"
               title={t("top.scan")}
             >
-              <RefreshCw size={13} className={busy ? "spin-slow" : undefined} />
-              <span className="hidden lg:inline">{busy ? t("top.scanning") : t("top.scan")}</span>
+              <RefreshCw size={13} className={scanning ? "spin-fast" : undefined} />
+              <span className="hidden lg:inline">{scanning ? t("top.scanning") : t("top.scan")}</span>
             </button>
           </div>
         </div>

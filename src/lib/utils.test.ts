@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "./types";
-import { filterItems, formatBytes, sortItems, splitSentences, firstSentence, truncate } from "./utils";
+import { filterItems, formatBytes, formatNumber, sortItems, splitSentences, firstSentence, truncate } from "./utils";
 
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -41,6 +41,13 @@ describe("formatBytes", () => {
     expect(formatBytes(2048)).toBe("2 КБ");
     expect(formatBytes(5 * 1024 * 1024)).toBe("5 МБ");
     expect(formatBytes(1536)).toBe("1.5 КБ");
+  });
+
+  it("uses english units and number grouping when lang is en", () => {
+    expect(formatBytes(2048, "en")).toBe("2 KB");
+    expect(formatBytes(512, "en")).toBe("512 B");
+    expect(formatNumber(1234, "en")).toBe("1,234");
+    expect(formatNumber(1234, "uk").replace(/\s/g, " ")).toBe("1 234");
   });
 });
 

@@ -60,11 +60,21 @@ export interface AgentTaskResult {
 }
 
 const taskWaiters = new Map<string, (result: AgentTaskResult | null) => void>();
+let previewToken = 0;
+let deviceTimer: number | null = null;
+
+const stopDeviceTimer = () => {
+  if (deviceTimer !== null) {
+    window.clearInterval(deviceTimer);
+    deviceTimer = null;
+  }
+};
 
 interface AppStore {
   ready: boolean;
   fatal: string | null;
   busy: boolean;
+  scanning: boolean;
 
   settings: Settings | null;
   secrets: Secrets;
@@ -97,10 +107,12 @@ interface AppStore {
   projectsLoading: boolean;
   feed: FeedCard[];
   feedLoading: boolean;
+  feedError: string | null;
   stats: Stats | null;
   duplicates: DuplicateGroup[];
   updates: UpdateInfo[];
   device: DeviceStart | null;
+  deviceWaiting: boolean;
   agents: Agent[];
   agentsLoading: boolean;
   agentTemplates: AgentTemplate[];
@@ -128,6 +140,7 @@ interface AppStore {
   setSecret: (kind: "deepseek" | "github", value: string) => Promise<boolean>;
   clearSecret: (kind: "deepseek" | "github") => Promise<void>;
   startGithub: () => Promise<DeviceStart | null>;
+  stopGithubWait: () => void;
   pollGithub: () => Promise<DevicePoll | null>;
   logoutGithub: () => Promise<void>;
   connectOpencode: (scope: string, project?: string) => Promise<string | null>;
@@ -155,7 +168,7 @@ interface AppStore {
   exportLibrary: (dest?: string) => Promise<string | null>;
   importLibrary: (src?: string) => Promise<ImportResult | null>;
   backupLibrary: () => Promise<string | null>;
-  loadAgents: () => Promise<void>;
+  loadAgents: (background?: boolean) => Promise<void>;
   loadAgentTemplates: () => Promise<void>;
   loadAgentRuntime: () => Promise<void>;
   loadAgentModels: () => Promise<void>;
@@ -240,6 +253,7 @@ export const useApp = create<AppStore>((set, get) => {
     ready: false,
     fatal: null,
     busy: false,
+    scanning: false,
 
     settings: null,
     secrets: { githubToken: false, deepseekKey: false },
@@ -272,10 +286,12 @@ export const useApp = create<AppStore>((set, get) => {
     projectsLoading: false,
     feed: [],
     feedLoading: false,
+    feedError: null,
     stats: null,
     duplicates: [],
     updates: [],
     device: null,
+    deviceWaiting: false,
     agents: [],
     agentsLoading: false,
     agentTemplates: [],
@@ -310,12 +326,16 @@ export const useApp = create<AppStore>((set, get) => {
     },
 
     refreshItems: async () => {
+      if (get().scanning) return;
+      set({ scanning: true });
       try {
         const items = await call<Item[]>("scan_library");
         set({ items });
         await get().refreshBudget();
       } catch (error) {
         get().pushToast(errorText(error), "error");
+      } finally {
+        set({ scanning: false });
       }
     },
 
@@ -331,34 +351,47 @@ export const useApp = create<AppStore>((set, get) => {
     analyze: async (url) => {
       const trimmed = url.trim();
       if (!trimmed) return null;
+      const token = ++previewToken;
       set({ previewLoading: true, previewError: null, previews: [], batchFailures: [] });
       try {
         const preview = await call<Preview>("preview_link", { url: trimmed });
+        if (token !== previewToken) return null;
         set({ previews: [preview], previewLoading: false });
         return preview;
       } catch (error) {
+        if (token !== previewToken) return null;
         set({ previewLoading: false, previewError: errorText(error) });
         return null;
       }
     },
 
     analyzeBatch: async (input) => {
+      const token = ++previewToken;
       set({ previewLoading: true, previewError: null, previews: [], batchFailures: [] });
       try {
         const result = await call<BatchPreview>("preview_batch", { input });
+        if (token !== previewToken) return null;
         set({
           previewLoading: false,
           previews: result.previews,
           batchFailures: result.failures,
         });
+        if (result.previews.length === 0 && result.failures.length === 0) {
+          get().pushToast(translate(lang(), "preview.noLinks"), "info");
+        }
         return result;
       } catch (error) {
+        if (token !== previewToken) return null;
         set({ previewLoading: false, previewError: errorText(error) });
         return null;
       }
     },
 
-    clearPreviews: () => set({ previews: [], previewError: null, batchFailures: [] }),
+    clearPreviews: () => {
+      // Скасовуємо незавершені запити: їхні відповіді більше не відкриють модалку.
+      previewToken += 1;
+      set({ previews: [], previewError: null, batchFailures: [], previewLoading: false });
+    },
 
     installPreview: async (preview) => {
       set((state) => ({
@@ -415,12 +448,13 @@ export const useApp = create<AppStore>((set, get) => {
       }
     },
 
-    toggleItem: async (id, enabled, scope = "global", project) => {
+    toggleItem: async (id, enabled, scope, project) => {
       try {
         const result = await call<{ item: Item; budget: Budget }>("set_enabled", {
           id,
           enabled,
-          scope,
+          // Для вимкнення scope не передаємо: бекенд прибирає всі лінки елемента.
+          scope: enabled ? scope ?? "global" : scope ?? null,
           project: project ?? null,
         });
         set((state) => ({
@@ -468,9 +502,14 @@ export const useApp = create<AppStore>((set, get) => {
 
     saveSettings: async (next) => {
       try {
+        const previousRoot = get().settings?.root;
         const saved = await call<Settings>("save_settings", { next });
         set({ settings: saved });
         say("toast.settingsSaved");
+        // Зміна кореня пересканує каталог на бекенді — підтягуємо новий список і бюджет.
+        if (previousRoot && saved.root !== previousRoot) {
+          await get().refreshItems();
+        }
         return true;
       } catch (error) {
         get().pushToast(errorText(error), "error");
@@ -501,12 +540,29 @@ export const useApp = create<AppStore>((set, get) => {
     startGithub: async () => {
       try {
         const device = await call<DeviceStart>("github_device_start");
-        set({ device });
+        stopDeviceTimer();
+        set({ device: device ?? null, deviceWaiting: Boolean(device) });
+        if (device) {
+          const interval = Math.max(device.interval, 5) * 1000;
+          deviceTimer = window.setInterval(async () => {
+            const result = await get().pollGithub();
+            if (!result) return;
+            if (result.state !== "pending" && result.state !== "slow_down") {
+              stopDeviceTimer();
+              set({ deviceWaiting: false });
+            }
+          }, interval);
+        }
         return device;
       } catch (error) {
         get().pushToast(errorText(error), "error");
         return null;
       }
+    },
+
+    stopGithubWait: () => {
+      stopDeviceTimer();
+      set({ device: null, deviceWaiting: false });
     },
 
     pollGithub: async () => {
@@ -517,7 +573,12 @@ export const useApp = create<AppStore>((set, get) => {
           deviceCode: device.deviceCode,
         });
         if (result.state === "ok") {
-          set({ device: null, secrets: { ...get().secrets, githubToken: true } });
+          stopDeviceTimer();
+          set({
+            device: null,
+            deviceWaiting: false,
+            secrets: { ...get().secrets, githubToken: true },
+          });
           try {
             const fresh = await call<Settings>("get_settings");
             set({ settings: fresh });
@@ -619,7 +680,7 @@ export const useApp = create<AppStore>((set, get) => {
       try {
         const path = await call<string>("project_init", { name });
         await get().loadProjects();
-        get().pushToast(translate(lang(), "projects.synced"), "ok");
+        get().pushToast(translate(lang(), "projects.created"), "ok");
         return path;
       } catch (error) {
         get().pushToast(errorText(error), "error");
@@ -628,12 +689,12 @@ export const useApp = create<AppStore>((set, get) => {
     },
 
     loadFeed: async (force = false) => {
-      set({ feedLoading: true });
+      set({ feedLoading: true, feedError: null });
       try {
         const feed = await call<FeedCard[]>("discover_feed", { force });
         set({ feed, feedLoading: false });
       } catch (error) {
-        set({ feedLoading: false });
+        set({ feedLoading: false, feedError: errorText(error) });
         get().pushToast(errorText(error), "error");
       }
     },
@@ -766,8 +827,8 @@ export const useApp = create<AppStore>((set, get) => {
       }
     },
 
-    loadAgents: async () => {
-      set({ agentsLoading: true });
+    loadAgents: async (background = false) => {
+      if (!background) set({ agentsLoading: true });
       try {
         const agents = await call<Agent[]>("agents_list");
         set({ agents, agentsLoading: false });
@@ -996,15 +1057,27 @@ export const useApp = create<AppStore>((set, get) => {
       const task = await get().runAgentTask(id, prompt, project, autoApprove);
       if (!task) return null;
       return new Promise<AgentTaskResult | null>((resolve) => {
-        taskWaiters.set(task.id, resolve);
-        window.setTimeout(() => {
+        let timer: number | null = null;
+        const done = (result: AgentTaskResult | null) => {
+          if (timer !== null) window.clearTimeout(timer);
+          resolve(result);
+        };
+        taskWaiters.set(task.id, done);
+        // Бекенд тримає таймаут 15 хв (commands.rs) — лишаємо запас, щоб не «вбити» живий цикл.
+        timer = window.setTimeout(() => {
           if (taskWaiters.delete(task.id)) resolve(null);
-        }, 12 * 60 * 1000);
+        }, 16 * 60 * 1000);
       });
     },
 
     cancelAgentTask: async (id) => {      try {
         await call("agent_cancel_task", { id });
+        const taskId = get().agentActivity[id]?.taskId;
+        const waiter = taskId ? taskWaiters.get(taskId) : undefined;
+        if (taskId && waiter) {
+          taskWaiters.delete(taskId);
+          waiter(null);
+        }
         set((state) => {
           const next = { ...state.agentActivity };
           delete next[id];
@@ -1109,7 +1182,7 @@ export const useApp = create<AppStore>((set, get) => {
           settings?.voiceEconomical ?? true,
         );
       }
-      void get().loadAgents();
+      void get().loadAgents(true);
     },
 
     chooseFolder: async () => {

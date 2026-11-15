@@ -44,9 +44,9 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, lang: "uk" | "en" = "uk"): string {
   if (!bytes || bytes <= 0) return "—";
-  const units = ["Б", "КБ", "МБ", "ГБ"];
+  const units = lang === "en" ? ["B", "KB", "MB", "GB"] : ["Б", "КБ", "МБ", "ГБ"];
   let value = bytes;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
@@ -59,8 +59,8 @@ export function formatBytes(bytes: number): string {
   return `${rounded} ${units[unit]}`;
 }
 
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat("uk-UA").format(Math.round(value));
+export function formatNumber(value: number, lang: "uk" | "en" = "uk"): string {
+  return new Intl.NumberFormat(lang === "en" ? "en-GB" : "uk-UA").format(Math.round(value));
 }
 
 export function formatDate(iso?: string | null, lang: "uk" | "en" = "uk"): string {

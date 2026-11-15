@@ -230,6 +230,29 @@ pub fn disable(db: &Db, item_id: &str, scope: &str, project: Option<&Path>) -> R
     Ok(())
 }
 
+/// Прибирає всі підключення елемента (глобальні та проєктні).
+pub fn disable_all(db: &Db, item_id: &str) -> Result<()> {
+    let links: Vec<LinkInfo> = db
+        .links()?
+        .into_iter()
+        .filter(|l| l.item_id == item_id)
+        .collect();
+    for link in links {
+        let target = PathBuf::from(&link.target);
+        if target.exists() || is_link_entry(&target) {
+            remove_entry(&target).map_err(|err| {
+                anyhow!(
+                    "Не вдалося прибрати посилання {}: {err}. Можливо, файл зайнятий — закрий OpenCode і спробуй ще раз.",
+                    target.display()
+                )
+            })?;
+        }
+        db.remove_link(item_id, &link.scope, link.project_path.as_deref().unwrap_or(""))?;
+    }
+    db.record_usage(Some(item_id), "disable", 0)?;
+    Ok(())
+}
+
 pub fn budget(db: &Db, threshold: i64) -> Budget {
     db.budget(threshold)
 }

@@ -3,20 +3,25 @@ import { motion } from "framer-motion";
 import {
   BarChart3,
   Bot,
+  Check,
   ChevronRight,
   Compass,
   FolderGit2,
   Layers,
   Library,
   Moon,
+  Pencil,
   Plus,
   Power,
   Settings as SettingsIcon,
   Star,
   Sun,
+  Trash2,
+  X,
 } from "lucide-react";
 import { KIND_ORDER, cn } from "@/lib/utils";
 import type { TranslationKey } from "@/lib/i18n";
+import type { Profile } from "@/lib/types";
 import { useApp, useT, type View } from "@/store";
 import { BudgetBar, KindIcon } from "./common";
 import { ProfileEditor } from "./ProfileEditor";
@@ -38,10 +43,13 @@ export function Sidebar() {
   const items = useApp((state) => state.items);
   const profiles = useApp((state) => state.profiles);
   const applyProfile = useApp((state) => state.applyProfile);
+  const deleteProfile = useApp((state) => state.deleteProfile);
   const budget = useApp((state) => state.budget);
   const settings = useApp((state) => state.settings);
   const saveSettings = useApp((state) => state.saveSettings);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -97,7 +105,7 @@ export function Sidebar() {
                   {active ? (
                     <motion.span
                       layoutId="nav-active"
-                      className="absolute inset-0 rounded-[11px] border border-[var(--line)] bg-white/[0.06]"
+                      className="absolute inset-0 rounded-[11px] border border-[var(--line)] bg-[var(--active)]"
                       transition={{ type: "spring", stiffness: 380, damping: 32 }}
                     />
                   ) : null}
@@ -124,7 +132,7 @@ export function Sidebar() {
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[13px] transition-colors",
                 kindFilter === "enabled" && view === "library"
-                  ? "bg-white/[0.06] text-[var(--text)]"
+                  ? "bg-[var(--active)] text-[var(--text)]"
                   : "text-[var(--muted)] hover:text-[var(--text)]",
               )}
             >
@@ -140,7 +148,7 @@ export function Sidebar() {
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[13px] transition-colors",
                 kindFilter === "favorites" && view === "library"
-                  ? "bg-white/[0.06] text-[var(--text)]"
+                  ? "bg-[var(--active)] text-[var(--text)]"
                   : "text-[var(--muted)] hover:text-[var(--text)]",
               )}
             >
@@ -165,8 +173,8 @@ export function Sidebar() {
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-[10px] px-3 py-[7px] text-[12.5px] transition-colors",
                     active
-                      ? "bg-white/[0.06] text-[var(--text)]"
-                      : "text-[var(--muted)] hover:bg-white/[0.035] hover:text-[var(--text)]",
+                      ? "bg-[var(--active)] text-[var(--text)]"
+                      : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]",
                     count === 0 && "opacity-55",
                   )}
                 >
@@ -185,8 +193,11 @@ export function Sidebar() {
           <div className="mb-1.5 mt-5 flex items-center justify-between px-3">
             <span className="label">{t("nav.profiles")}</span>
             <button
-              onClick={() => setEditorOpen(true)}
-              className="rounded-md p-1 text-[var(--faint)] transition-colors hover:bg-white/6 hover:text-[var(--text)]"
+              onClick={() => {
+                setEditingProfile(null);
+                setEditorOpen(true);
+              }}
+              className="rounded-md p-1 text-[var(--faint)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]"
               title={t("profiles.create")}
             >
               <Plus size={13} />
@@ -201,7 +212,7 @@ export function Sidebar() {
               profiles.map((profile) => (
                 <div
                   key={profile.id}
-                  className="group flex items-center gap-2 rounded-[10px] px-3 py-1.5 transition-colors hover:bg-white/[0.04]"
+                  className="group flex items-center gap-2 rounded-[10px] px-3 py-1.5 transition-colors hover:bg-[var(--hover)]"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[12.5px] font-medium">{profile.name}</div>
@@ -209,13 +220,54 @@ export function Sidebar() {
                       {profile.itemIds.length} · {profile.description || t("profiles.items")}
                     </div>
                   </div>
-                  <button
-                    onClick={() => void applyProfile(profile.id)}
-                    className="rounded-md p-1 text-[var(--faint)] opacity-0 transition-all hover:text-[var(--accent)] group-hover:opacity-100"
-                    title={t("profiles.apply")}
-                  >
-                    <Power size={13} />
-                  </button>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => void applyProfile(profile.id)}
+                      className="rounded-md p-1 text-[var(--faint)] opacity-0 transition-all hover:text-[var(--accent)] focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                      title={t("profiles.apply")}
+                    >
+                      <Power size={13} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingProfile(profile);
+                        setEditorOpen(true);
+                      }}
+                      className="rounded-md p-1 text-[var(--faint)] opacity-0 transition-all hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                      title={t("common.edit")}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    {confirmDelete === profile.id ? (
+                      <>
+                        <button
+                          onClick={async () => {
+                            await deleteProfile(profile.id);
+                            setConfirmDelete(null);
+                          }}
+                          className="rounded-md p-1 text-[var(--danger)]"
+                          title={t("common.confirm")}
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(null)}
+                          className="rounded-md p-1 text-[var(--faint)] hover:text-[var(--text)]"
+                          title={t("common.cancel")}
+                        >
+                          <X size={12} />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDelete(profile.id)}
+                        className="rounded-md p-1 text-[var(--faint)] opacity-0 transition-all hover:text-[var(--danger)] focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                        title={t("profiles.delete")}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -228,7 +280,7 @@ export function Sidebar() {
             className={cn(
               "flex w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[13px] transition-colors",
               view === "settings"
-                ? "bg-white/[0.06] text-[var(--text)]"
+                ? "bg-[var(--active)] text-[var(--text)]"
                 : "text-[var(--muted)] hover:text-[var(--text)]",
             )}
           >
@@ -278,7 +330,14 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <ProfileEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
+      <ProfileEditor
+        open={editorOpen}
+        profile={editingProfile}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingProfile(null);
+        }}
+      />
     </>
   );
 }

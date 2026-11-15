@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -17,7 +17,7 @@ import { call, onEvent } from "@/lib/api";
 import type { AwesomeCandidate, Preview } from "@/lib/types";
 import { cn, formatBytes, relativeDate } from "@/lib/utils";
 import { useApp, useT } from "@/store";
-import { KindIcon, RiskDot } from "./common";
+import { KindIcon, RiskDot, useEscape, useFocusTrap } from "./common";
 
 export function AddPreview() {
   const t = useT();
@@ -30,9 +30,22 @@ export function AddPreview() {
   const savePreview = useApp((state) => state.savePreview);
   const setProgress = useApp((state) => state.setProgress);
   const [batchBusy, setBatchBusy] = useState(false);
+  const batchCancelRef = useRef(false);
 
   const open =
     previewLoading || Boolean(previewError) || previews.length > 0 || batchFailures.length > 0;
+
+  // Закриття скасовує незавершений аналіз і масове встановлення.
+  const close = () => {
+    batchCancelRef.current = true;
+    clearPreviews();
+  };
+  useEscape(open, close);
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
+
+  useEffect(() => {
+    if (open) batchCancelRef.current = false;
+  }, [open]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -46,7 +59,9 @@ export function AddPreview() {
 
   const installAll = async () => {
     setBatchBusy(true);
+    batchCancelRef.current = false;
     for (const preview of previews) {
+      if (batchCancelRef.current) break;
       await installPreview(preview);
     }
     setBatchBusy(false);
@@ -61,8 +76,11 @@ export function AddPreview() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div className="fixed inset-0 bg-black/55 backdrop-blur-sm" onClick={clearPreviews} />
+          <div className="fixed inset-0 bg-black/55 backdrop-blur-sm" onClick={close} />
           <motion.div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
             initial={{ opacity: 0, y: 22, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 14, scale: 0.99 }}
@@ -83,7 +101,7 @@ export function AddPreview() {
                       : t("preview.analyzingHint")}
                 </p>
               </div>
-              <button className="btn btn-ghost !p-2" onClick={clearPreviews}>
+              <button className="btn btn-ghost !p-2" onClick={close}>
                 <X size={16} />
               </button>
             </header>
@@ -96,7 +114,7 @@ export function AddPreview() {
                       className="absolute inset-0 rounded-full opacity-30 blur-xl"
                       style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-2))" }}
                     />
-                    <Loader2 size={26} className="spin-slow" style={{ color: "var(--accent)" }} />
+                    <Loader2 size={26} className="spin-fast" style={{ color: "var(--accent)" }} />
                   </div>
                   <p className="text-[13px] font-medium">{t("preview.analyzing")}</p>
                   <p className="text-[11.5px] text-[var(--faint)]">{t("preview.analyzingHint")}</p>
@@ -143,12 +161,12 @@ export function AddPreview() {
                   {previews.length} · {t("preview.download")}
                 </span>
                 <div className="flex gap-2">
-                  <button className="btn" onClick={clearPreviews}>
+                  <button className="btn" onClick={close}>
                     {t("common.cancel")}
                   </button>
                   {previews.length > 1 ? (
                     <button className="btn btn-primary" disabled={batchBusy} onClick={() => void installAll()}>
-                      {batchBusy ? <Loader2 size={13} className="spin-slow" /> : <Download size={13} />}
+                      {batchBusy ? <Loader2 size={13} className="spin-fast" /> : <Download size={13} />}
                       {t("preview.addSelected")} ({previews.length})
                     </button>
                   ) : null}
@@ -233,7 +251,7 @@ function PreviewCard({
             <span>·</span>
             <span className="tabular-nums">★ {preview.stars}</span>
             <span>·</span>
-            <span>{formatBytes(preview.sizeBytes)}</span>
+            <span>{formatBytes(preview.sizeBytes, lang)}</span>
             <span>·</span>
             <span>{preview.fileCount} · {t("preview.files").toLowerCase()}</span>
             {preview.pushedAt ? (
@@ -339,7 +357,7 @@ function PreviewCard({
           <p className="text-[11px] text-[var(--muted)]">{t("preview.awesomeHint")}</p>
           {awesome === null ? (
             <button className="btn !py-1 text-[11px]" disabled={awesomeBusy} onClick={() => void loadAwesome()}>
-              {awesomeBusy ? <Loader2 size={11} className="spin-slow" /> : <ListTree size={11} />}
+              {awesomeBusy ? <Loader2 size={11} className="spin-fast" /> : <ListTree size={11} />}
               {t("top.awesome")}
             </button>
           ) : awesome.length === 0 ? (
@@ -374,7 +392,7 @@ function PreviewCard({
                       }
                       className={cn(
                         "flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors",
-                        active ? "bg-white/[0.06]" : "hover:bg-white/[0.03]",
+                        active ? "bg-[var(--active)]" : "hover:bg-[var(--hover)]",
                       )}
                     >
                       <span
@@ -424,7 +442,7 @@ function PreviewCard({
           disabled={Boolean(installing)}
           onClick={onInstall}
         >
-          {installing ? <Loader2 size={13} className="spin-slow" /> : <Download size={13} />}
+          {installing ? <Loader2 size={13} className="spin-fast" /> : <Download size={13} />}
           {installing ? t("preview.installProgress") : t("preview.download")}
         </button>
         <button className="btn !py-2 text-[12px]" onClick={onSave}>
@@ -435,7 +453,7 @@ function PreviewCard({
 
       {installing ? (
         <div className="mt-2.5 space-y-1">
-          <div className="h-1 overflow-hidden rounded-full bg-white/8">
+          <div className="h-1 overflow-hidden rounded-full bg-[var(--track)]">
             <motion.div
               className="h-full rounded-full"
               style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))" }}

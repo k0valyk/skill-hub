@@ -193,9 +193,13 @@ impl Db {
             item.has_local_files = Path::new(&item.path).exists();
             if let Ok(links) = self.item_links(id) {
                 item.enabled = !links.is_empty();
+                // Той самий формат підпису, що й у `items()`: global / project|<path>.
                 item.scopes = links
                     .iter()
-                    .map(|l| l.scope.clone())
+                    .map(|l| match l.scope.as_str() {
+                        "global" => "global".to_string(),
+                        _ => format!("project|{}", l.project_path.clone().unwrap_or_default()),
+                    })
                     .collect::<Vec<_>>();
             }
             item

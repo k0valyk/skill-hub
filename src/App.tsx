@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { Loader2, TriangleAlert } from "lucide-react";
 import { AddPreview } from "@/components/AddPreview";
 import { Agents } from "@/components/Agents";
@@ -18,6 +18,15 @@ import { applyAccent } from "@/lib/utils";
 import { useApp, useT } from "@/store";
 
 export default function App() {
+  const reduceMotion = useApp((state) => state.settings?.reduceMotion ?? false);
+  return (
+    <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
+      <AppShell />
+    </MotionConfig>
+  );
+}
+
+function AppShell() {
   const ready = useApp((state) => state.ready);
   const fatal = useApp((state) => state.fatal);
   const startupError = useApp((state) => state.startupError);
@@ -90,7 +99,7 @@ export default function App() {
           className="relative flex size-16 items-center justify-center rounded-[20px] text-white shadow-xl"
           style={{ background: "linear-gradient(140deg, var(--accent), var(--accent-2))" }}
         >
-          <Loader2 size={24} className="spin-slow" />
+          <Loader2 size={24} className="spin-fast" />
         </motion.div>
         <p className="text-[12px] text-[var(--faint)]">{t("common.loading")}</p>
       </div>

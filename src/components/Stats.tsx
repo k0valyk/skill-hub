@@ -18,6 +18,7 @@ import { BudgetBar, KindIcon, Stat } from "./common";
 
 export function Stats() {
   const t = useT();
+  const lang = useApp((state) => state.settings?.language ?? "uk");
   const stats = useApp((state) => state.stats);
   const duplicates = useApp((state) => state.duplicates);
   const loadStats = useApp((state) => state.loadStats);
@@ -27,6 +28,9 @@ export function Stats() {
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
+
+  const n = (value: number) => formatNumber(value, lang);
+  const bytes = (value: number) => formatBytes(value, lang);
 
   const byKind = new Map(stats?.byKind ?? []);
   const maxKind = Math.max(1, ...KIND_ORDER.map((kind) => byKind.get(kind) ?? 0));
@@ -44,23 +48,23 @@ export function Stats() {
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <Stat
             label={t("stats.totalItems")}
-            value={formatNumber(stats?.total ?? 0)}
+            value={n(stats?.total ?? 0)}
             icon={<Boxes size={15} />}
           />
           <Stat
             label={t("stats.enabledItems")}
-            value={formatNumber(stats?.enabled ?? 0)}
-            hint={budget ? `${budget.enabledCount} → ${formatNumber(budget.advertisedTokens)} ${t("common.tokens")}` : undefined}
+            value={n(stats?.enabled ?? 0)}
+            hint={budget ? `${budget.enabledCount} → ${n(budget.advertisedTokens)} ${t("common.tokens")}` : undefined}
             icon={<Zap size={15} />}
           />
           <Stat
             label={t("stats.mcpCalls")}
-            value={formatNumber(stats?.mcpCalls ?? 0)}
+            value={n(stats?.mcpCalls ?? 0)}
             icon={<Server size={15} />}
           />
           <Stat
             label={t("stats.totalSize")}
-            value={formatBytes(stats?.totalSize ?? 0)}
+            value={bytes(stats?.totalSize ?? 0)}
             icon={<Database size={15} />}
           />
         </div>
@@ -78,7 +82,7 @@ export function Stats() {
                   <div key={kind} className="flex items-center gap-2">
                     <KindIcon kind={kind} size={12} className="shrink-0 text-[var(--muted)]" />
                     <span className="w-[104px] shrink-0 truncate text-[11.5px]">{t(`kind.${kind}` as Parameters<typeof t>[0])}</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/6">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--track)]">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(count / maxKind) * 100}%` }}
@@ -105,21 +109,21 @@ export function Stats() {
               <>
                 <div className="flex items-baseline justify-between">
                   <span className="text-[22px] font-semibold tabular-nums">
-                    {formatNumber(budget.advertisedTokens)}
+                    {n(budget.advertisedTokens)}
                   </span>
                   <span className="text-[11px] text-[var(--faint)]">
-                    / {formatNumber(budget.threshold)} {t("common.tokens")}
+                    / {n(budget.threshold)} {t("common.tokens")}
                   </span>
                 </div>
                 <BudgetBar used={budget.advertisedTokens} limit={budget.threshold} level={budget.level} />
                 <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
                   <div className="rounded-[8px] border border-[var(--line)] px-2.5 py-1.5">
                     <div className="text-[var(--faint)]">{t("stats.budgetUsed")}</div>
-                    <div className="tabular-nums">{formatNumber(budget.advertisedTokens)}</div>
+                    <div className="tabular-nums">{n(budget.advertisedTokens)}</div>
                   </div>
                   <div className="rounded-[8px] border border-[var(--line)] px-2.5 py-1.5">
                     <div className="text-[var(--faint)]">{t("detail.tokensFull")}</div>
-                    <div className="tabular-nums">{formatNumber(budget.onDemandTokens)}</div>
+                    <div className="tabular-nums">{n(budget.onDemandTokens)}</div>
                   </div>
                 </div>
                 <p className="text-[10.5px] leading-relaxed text-[var(--faint)]">{t("stats.estimateNote")}</p>
@@ -142,7 +146,7 @@ export function Stats() {
                   <button
                     key={id}
                     onClick={() => selectItem(id)}
-                    className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04]"
+                    className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors hover:bg-[var(--hover)]"
                   >
                     <span className="mono min-w-0 flex-1 truncate text-[11.5px]">{id}</span>
                     <span className="text-[10.5px] tabular-nums text-[var(--faint)]">{count}×</span>

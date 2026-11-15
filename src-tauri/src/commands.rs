@@ -561,22 +561,32 @@ pub async fn set_enabled(
     project: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<ToggleResult, String> {
-    let scope_value = scope.unwrap_or_else(|| "global".into());
+    let scope_value = scope;
     let project_path = project.filter(|p| !p.trim().is_empty()).map(PathBuf::from);
-    if scope_value == "project" && project_path.is_none() {
-        return Err("Вибери папку проєкту для проєктного підключення.".into());
-    }
     let handle = state.db.lock().unwrap();
     let item = handle
         .get_item(&id)
         .map_err(|e| humanize(&e))?
         .ok_or_else(|| "Елемент не знайдено".to_string())?;
     if enabled {
+        let scope_value = scope_value.unwrap_or_else(|| "global".into());
+        if scope_value == "project" && project_path.is_none() {
+            return Err("Вибери папку проєкту для проєктного підключення.".into());
+        }
         crate::linking::enable(&handle, &item, &scope_value, project_path.as_deref())
             .map_err(|e| humanize(&e))?;
     } else {
-        crate::linking::disable(&handle, &id, &scope_value, project_path.as_deref())
-            .map_err(|e| humanize(&e))?;
+        match scope_value.as_deref() {
+            Some(scope_value) => {
+                if scope_value == "project" && project_path.is_none() {
+                    return Err("Вибери папку проєкту для проєктного підключення.".into());
+                }
+                crate::linking::disable(&handle, &id, scope_value, project_path.as_deref())
+                    .map_err(|e| humanize(&e))?
+            }
+            // Без явного scope вимикаємо елемент повністю, разом із проєктними лінками.
+            None => crate::linking::disable_all(&handle, &id).map_err(|e| humanize(&e))?,
+        }
     }
     let budget = handle.budget(state.threshold());
     let updated = handle

@@ -29,7 +29,7 @@ import {
   splitSentences,
 } from "@/lib/utils";
 import { useApp, useT } from "@/store";
-import { BudgetBar, KindIcon, RiskDot, Toggle } from "./common";
+import { BudgetBar, KindIcon, RiskDot, Toggle, useEscape, useFocusTrap } from "./common";
 
 export function DetailDrawer() {
   const t = useT();
@@ -38,6 +38,8 @@ export function DetailDrawer() {
   const selectItem = useApp((state) => state.selectItem);
   const lang = useApp((state) => state.settings?.language ?? "uk");
   const item = items.find((entry) => entry.id === selectedId) ?? null;
+  useEscape(Boolean(item), () => selectItem(null));
+  const trapRef = useFocusTrap<HTMLElement>(Boolean(item));
 
   return (
     <AnimatePresence>
@@ -51,6 +53,10 @@ export function DetailDrawer() {
         >
           <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={() => selectItem(null)} />
           <motion.aside
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={item.name}
             initial={{ x: 60, opacity: 0.6 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 40, opacity: 0 }}
@@ -88,6 +94,8 @@ function DetailContent({
   const openUrl = useApp((state) => state.openUrl);
   const updates = useApp((state) => state.updates);
   const budget = useApp((state) => state.budget);
+  const projects = useApp((state) => state.projects);
+  const loadProjects = useApp((state) => state.loadProjects);
 
   const [notes, setNotes] = useState(item.notes);
   const [tagDraft, setTagDraft] = useState("");
@@ -98,6 +106,7 @@ function DetailContent({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [removeFiles, setRemoveFiles] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [scopeTarget, setScopeTarget] = useState("global");
 
   useEffect(() => {
     setNotes(item.notes);
@@ -105,7 +114,41 @@ function DetailContent({
     setContent(null);
     setConfirmDelete(false);
     setRemoveFiles(false);
+    setScopeTarget("global");
   }, [item.id, item.notes, item.name]);
+
+  useEffect(() => {
+    if (projects.length === 0) void loadProjects();
+  }, [projects.length, loadProjects]);
+
+  const projectOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const project of projects) map.set(project.path, project.name);
+    for (const scope of item.scopes) {
+      if (!scope.startsWith("project|")) continue;
+      const path = scope.slice("project|".length);
+      if (path && !map.has(path)) {
+        map.set(path, path.split(/[\\/]/).filter(Boolean).pop() ?? path);
+      }
+    }
+    return [...map.entries()];
+  }, [projects, item.scopes]);
+
+  const scopeLabel = (value: string) => {
+    if (value === "global") return t("card.global");
+    const path = value.startsWith("project|") ? value.slice("project|".length) : value;
+    const name = projectOptions.find(([entry]) => entry === path)?.[1] ?? path;
+    return `${t("card.project")}: ${name}`;
+  };
+
+  const changeEnabled = (next: boolean) => {
+    if (!next) {
+      void toggleItem(item.id, false);
+      return;
+    }
+    if (scopeTarget === "global") void toggleItem(item.id, true, "global");
+    else void toggleItem(item.id, true, "project", scopeTarget);
+  };
 
   const update = updates.find((entry) => entry.id === item.id);
   const sentences = useMemo(() => splitSentences(itemSummary(item, lang)), [item, lang]);
@@ -210,16 +253,35 @@ function DetailContent({
             </div>
             <div className="text-[10.5px] text-[var(--faint)]">
               {item.enabled
-                ? t("detail.enabledIn") + `: ${item.scopes.join(", ") || t("card.global")}`
+                ? t("detail.enabledIn") +
+                  `: ${item.scopes.map(scopeLabel).join(", ") || t("card.global")}`
                 : t("detail.budgetImpact", { n: item.tokensEst })}
             </div>
           </div>
           <Toggle
             checked={item.enabled}
-            onChange={(next) => void toggleItem(item.id, next)}
-            label={t("card.enable")}
+            onChange={changeEnabled}
+            label={item.enabled ? t("card.disable") : t("card.enable")}
           />
         </div>
+
+        {!item.enabled ? (
+          <label className="flex items-center gap-2 text-[11px] text-[var(--faint)]">
+            <span className="shrink-0">{t("detail.scopes")}:</span>
+            <select
+              className="input h-[28px] min-w-0 flex-1 !py-0 text-[11px]"
+              value={scopeTarget}
+              onChange={(event) => setScopeTarget(event.target.value)}
+            >
+              <option value="global">{t("card.global")}</option>
+              {projectOptions.map(([path, name]) => (
+                <option key={path} value={path}>
+                  {t("card.project")}: {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         {budget && item.enabled ? (
           <div className="space-y-1.5">
@@ -292,7 +354,7 @@ function DetailContent({
                   setUpdating(false);
                 }}
               >
-                {updating ? <Loader2 size={11} className="spin-slow" /> : <Download size={11} />}
+                {updating ? <Loader2 size={11} className="spin-fast" /> : <Download size={11} />}
                 {updating ? t("common.updating") : t("common.update")}
               </button>
             ) : null}
@@ -302,7 +364,7 @@ function DetailContent({
               <DetailBlock icon={<FileText size={12} />} title={t("detail.whatItDoes")} text={what} />
             ) : null}
             {does ? (
-              <DetailBlock icon={<Code2 size={12} />} title={t("detail.whatItDoes")} text={does} />
+              <DetailBlock icon={<Code2 size={12} />} title={t("detail.howItWorks")} text={does} />
             ) : null}
             {why ? (
               <DetailBlock icon={<Sparkles size={12} />} title={t("detail.whyUseful")} text={why} />
@@ -316,7 +378,7 @@ function DetailContent({
                 <span className="mono">{item.sourceRef.slice(0, 7)}</span>
               </span>
               {item.license ? <span className="chip !py-0.5">{item.license}</span> : null}
-              <span>{formatBytes(item.sizeBytes)}</span>
+              <span>{formatBytes(item.sizeBytes, lang)}</span>
               <span>·</span>
               <span>{t("detail.tokensShort")}: ≈{item.tokensEst}</span>
             </div>
@@ -424,7 +486,7 @@ function DetailContent({
             <h3 className="label">{t("detail.content")}</h3>
             <span className="flex items-center gap-1 text-[11px] text-[var(--faint)]">
               {contentLoading ? (
-                <Loader2 size={11} className="spin-slow" />
+                <Loader2 size={11} className="spin-fast" />
               ) : (
                 <ChevronRight
                   size={12}
@@ -447,7 +509,7 @@ function DetailContent({
             <MetaRow label={t("detail.path")} value={item.path} mono />
             <MetaRow label={t("detail.added")} value={formatDate(item.addedAt, lang)} />
             <MetaRow label={t("detail.updated")} value={relativeDate(item.updatedAt, lang)} />
-            <MetaRow label={t("detail.size")} value={formatBytes(item.sizeBytes)} />
+            <MetaRow label={t("detail.size")} value={formatBytes(item.sizeBytes, lang)} />
             <MetaRow label={t("detail.license")} value={item.license || t("detail.noLicense")} />
             <MetaRow label={t("detail.tokensFull")} value={`≈${item.tokensEst * 12} ${t("common.tokens")}`} />
             {item.commit ? (

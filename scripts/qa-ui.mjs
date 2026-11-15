@@ -1,9 +1,10 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
 
 const base = "http://localhost:1420";
+const altBase = "http://[::1]:1420";
 const root = process.cwd();
 const outDir = join(root, "reports", "ui");
 mkdirSync(outDir, { recursive: true });
@@ -11,12 +12,35 @@ mkdirSync(outDir, { recursive: true });
 const errors = [];
 const steps = [];
 
-async function serverReady() {
+async function ping(url) {
   try {
-    const response = await fetch(base, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
     return response.ok;
   } catch {
     return false;
+  }
+}
+
+// Vite може зайняти ::1, тому перевіряємо обидві адреси.
+async function serverReady() {
+  if (await ping(base)) return true;
+  return ping(altBase);
+}
+
+function killTree(child) {
+  if (!child || child.killed || !child.pid) return;
+  try {
+    if (process.platform === "win32") {
+      // Синхронно, інакше процес завершиться раніше, ніж taskkill встигне прибрати дерево.
+      spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+    } else {
+      child.kill("SIGTERM");
+    }
+  } catch {
+    /* процес уже завершився */
   }
 }
 
@@ -24,18 +48,19 @@ let dev = null;
 if (!(await serverReady())) {
   dev = spawn("npm.cmd", ["run", "dev"], {
     cwd: root,
-    stdio: "ignore",
+    stdio: "inherit",
     shell: true,
     windowsHide: true,
   });
-  for (let i = 0; i < 60; i += 1) {
+  for (let i = 0; i < 90; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     if (await serverReady()) break;
   }
 }
 
 if (!(await serverReady())) {
-  console.error("Vite dev server is not available on http://localhost:1420");
+  console.error(`Vite dev server is not available on ${base} or ${altBase}`);
+  killTree(dev);
   process.exit(1);
 }
 
@@ -175,7 +200,7 @@ try {
   await shot("99-failure.png").catch(() => {});
 } finally {
   await browser.close();
-  if (dev) dev.kill();
+  killTree(dev);
 }
 
 const report = {

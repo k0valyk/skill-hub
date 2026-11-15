@@ -46,7 +46,7 @@ import {
 import { cn, formatNumber, relativeDate } from "@/lib/utils";
 import { useApp, useT } from "@/store";
 import { AgentQaCycle } from "./AgentQaCycle";
-import { KindIcon } from "./common";
+import { KindIcon, Toggle, useEscape, useFocusTrap } from "./common";
 
 const STATUS_FILTERS = ["all", "idle", "working", "waiting", "error", "disabled"] as const;
 
@@ -141,8 +141,15 @@ function permissionTone(effect: string) {
   return "var(--ok)";
 }
 
-function formatDuration(ms: number) {
+function formatDuration(ms: number, lang: "uk" | "en" = "uk") {
   if (!ms) return "—";
+  if (lang === "en") {
+    if (ms < 1000) return `${ms} ms`;
+    const seconds = Math.round(ms / 1000);
+    if (seconds < 60) return `${seconds} s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes} min ${seconds % 60} s`;
+  }
   if (ms < 1000) return `${ms} мс`;
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds} с`;
@@ -180,19 +187,19 @@ export function Agents() {
   const refreshRef = useRef(false);
 
   useEffect(() => {
-    const refresh = async () => {
+    const refresh = async (background = true) => {
       if (refreshRef.current) return;
       refreshRef.current = true;
       try {
-        await loadAgents();
+        await loadAgents(background);
       } finally {
         refreshRef.current = false;
       }
     };
-    void refresh();
+    void refresh(false);
     void loadAgentTemplates();
     void loadAgentRuntime();
-    const timer = window.setInterval(() => void refresh(), 6000);
+    const timer = window.setInterval(() => void refresh(true), 6000);
     return () => window.clearInterval(timer);
   }, [loadAgents, loadAgentTemplates, loadAgentRuntime]);
 
@@ -297,7 +304,7 @@ export function Agents() {
               onClick={() => setLayout("grid")}
               className={cn(
                 "rounded-[8px] p-1.5 transition-colors",
-                layout === "grid" ? "bg-white/8 text-[var(--text)]" : "text-[var(--faint)]",
+                layout === "grid" ? "bg-[var(--active)] text-[var(--text)]" : "text-[var(--faint)]",
               )}
               title={t("agents.grid")}
             >
@@ -307,7 +314,7 @@ export function Agents() {
               onClick={() => setLayout("graph")}
               className={cn(
                 "rounded-[8px] p-1.5 transition-colors",
-                layout === "graph" ? "bg-white/8 text-[var(--text)]" : "text-[var(--faint)]",
+                layout === "graph" ? "bg-[var(--active)] text-[var(--text)]" : "text-[var(--faint)]",
               )}
               title={t("agents.graph")}
             >
@@ -320,7 +327,7 @@ export function Agents() {
             disabled={loading}
             title={t("agents.refresh")}
           >
-            <RefreshCw size={12} className={loading ? "spin-slow" : undefined} />
+            <RefreshCw size={12} className={loading ? "spin-fast" : undefined} />
           </button>
           <button
             className="btn !h-[32px] !px-2.5 !py-0 text-[11px]"
@@ -447,16 +454,11 @@ const AgentCard = memo(function AgentCard({
             <span>{t(`agents.mode${agent.mode === "primary" ? "Primary" : agent.mode === "all" ? "All" : "Subagent"}` as Parameters<typeof t>[0])}</span>
           </div>
         </div>
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            void toggleAgent(agent.id, !agent.enabled);
-          }}
-          className={cn("rounded-md p-1.5 transition-colors", agent.enabled ? "text-[var(--ok)]" : "text-[var(--faint)]")}
-          title={agent.enabled ? t("agents.disable") : t("agents.enable")}
-        >
-          <span className={cn("block size-2 rounded-full", agent.enabled ? "bg-[var(--ok)]" : "bg-[var(--faint)]")} />
-        </button>
+        <Toggle
+          checked={agent.enabled}
+          onChange={(next) => void toggleAgent(agent.id, next)}
+          label={agent.enabled ? t("agents.disable") : t("agents.enable")}
+        />
       </div>
 
       <p className="line-clamp-2 min-h-[34px] text-[11.5px] leading-relaxed text-[var(--muted)]">
@@ -501,7 +503,7 @@ const AgentCard = memo(function AgentCard({
           <FolderGit2 size={10} /> {agent.projects.length + (agent.projectPath ? 1 : 0)}
         </span>
         <span className="flex items-center justify-end gap-1" title={t("agents.tokens")}>
-          <Coins size={10} /> {formatNumber(agent.tokensIn + agent.tokensOut)}
+          <Coins size={10} /> {formatNumber(agent.tokensIn + agent.tokensOut, lang)}
         </span>
       </div>
       <div className="flex items-center justify-between text-[9.5px] text-[var(--faint)]">
@@ -544,7 +546,7 @@ function AgentGraph({ agents, onOpen }: { agents: Agent[]; onOpen: (id: string) 
     const out: { key: string; d: string }[] = [];
     agents.forEach((agent, index) => {
       const y = agentY(index) + 37;
-      for (const path of [...agent.projects, agent.projectPath ?? ""].filter(Boolean)) {
+      for (const path of [...new Set([...agent.projects, agent.projectPath ?? ""].filter(Boolean))]) {
         const target = projects.indexOf(path);
         if (target < 0) continue;
         const ty = projectY(target) + 24;
@@ -687,6 +689,7 @@ function AgentDrawer({
   const [autoSend, setAutoSend] = useState(getVoiceAutoSend());
   const [voiceOn, setVoiceOn] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const trapRef = useFocusTrap<HTMLElement>(Boolean(agent));
 
   useEffect(() => {
     if (!agent) return;
@@ -716,7 +719,7 @@ function AgentDrawer({
   useEffect(() => {
     if (!agent) return;
     void loadAgentTasks(agent.id).then(setTasks);
-  }, [agent?.lastRunAt, agent?.status, agent?.id, loadAgentTasks]);
+  }, [agent?.lastRunAt, agent?.id, loadAgentTasks]);
 
   const availableSkills = items.filter((item) => !agent?.skills.includes(item.id));
   const active = agent ? agent.status === "working" || agent.status === "waiting" : false;
@@ -757,6 +760,10 @@ function AgentDrawer({
         >
           <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={onClose} />
           <motion.aside
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={agent.name}
             initial={{ x: 60, opacity: 0.6 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 40, opacity: 0 }}
@@ -879,7 +886,7 @@ function AgentDrawer({
                 <Meta label={t("agents.techName")} value={agent.techName} mono />
                 <Meta label={t("agents.model")} value={agent.model || defaultModel || t("agents.noModel")} mono />
                 <Meta label={t("agents.steps")} value={agent.steps ? String(agent.steps) : "—"} />
-                <Meta label={t("agents.tokens")} value={formatNumber(agent.bodyTokens)} />
+                <Meta label={t("agents.tokens")} value={formatNumber(agent.bodyTokens, lang)} />
                 <Meta label={t("agents.updated")} value={relativeDate(agent.updatedAt, lang)} />
                 <Meta label={t("agents.scope")} value={agent.scope === "project" ? t("agents.scopeProject") : t("agents.scopeGlobal")} />
               </section>
@@ -1020,8 +1027,8 @@ function AgentDrawer({
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[9.5px] text-[var(--faint)]">
                           <span>{relativeDate(task.startedAt, lang)}</span>
-                          <span>· {formatDuration(task.durationMs)}</span>
-                          <span>· {formatNumber(task.tokensIn + task.tokensOut)} {t("common.tokens")}</span>
+                          <span>· {formatDuration(task.durationMs, lang)}</span>
+                          <span>· {formatNumber(task.tokensIn + task.tokensOut, lang)} {t("common.tokens")}</span>
                           {task.projectPath ? <span className="mono truncate">· {task.projectPath}</span> : null}
                           {task.status === "error" ? (
                             <button
@@ -1142,7 +1149,7 @@ function AgentDrawer({
                   onClick={() => void listen()}
                   title={t("agents.listenHint")}
                 >
-                  {listening ? <Loader2 size={11} className="spin-slow" /> : <Mic size={11} />}
+                  {listening ? <Loader2 size={11} className="spin-fast" /> : <Mic size={11} />}
                   {listening ? t("agents.listening") : t("agents.listen")}
                 </button>
                 <label className="flex items-center gap-1.5 text-[10px] text-[var(--faint)]" title={t("agents.autoSendHint")}>
@@ -1161,7 +1168,7 @@ function AgentDrawer({
                   disabled={!prompt.trim() || busy || active}
                   onClick={() => void send()}
                 >
-                  {busy ? <Loader2 size={11} className="spin-slow" /> : <Send size={11} />}
+                  {busy ? <Loader2 size={11} className="spin-fast" /> : <Send size={11} />}
                   {t("agents.send")}
                 </button>
               </div>
@@ -1218,6 +1225,9 @@ function AgentCreateModal({
   const [project, setProject] = useState("");
   const [tags, setTags] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEscape(open, onClose);
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!open) return;
@@ -1298,6 +1308,10 @@ function AgentCreateModal({
         >
           <div className="fixed inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
           <motion.div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("agents.createTitle")}
             initial={{ opacity: 0, y: 20, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12 }}
@@ -1413,7 +1427,7 @@ function AgentCreateModal({
                 disabled={!name.trim() || busy || (scope === "project" && !project)}
                 onClick={() => void create()}
               >
-                {busy ? <Loader2 size={12} className="spin-slow" /> : <Plus size={12} />}
+                {busy ? <Loader2 size={12} className="spin-fast" /> : <Plus size={12} />}
                 {t("agents.createSubmit")}
               </button>
             </footer>

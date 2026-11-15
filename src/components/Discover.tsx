@@ -11,6 +11,7 @@ export function Discover() {
   const lang = useApp((state) => state.settings?.language ?? "uk");
   const feed = useApp((state) => state.feed);
   const loading = useApp((state) => state.feedLoading);
+  const feedError = useApp((state) => state.feedError);
   const loadFeed = useApp((state) => state.loadFeed);
   const analyze = useApp((state) => state.analyze);
   const [busyUrl, setBusyUrl] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function Discover() {
       <div className="mx-auto max-w-[980px] space-y-3">
         <div className="flex items-center gap-2">
           <button className="btn !py-1.5 text-[11.5px]" disabled={loading} onClick={() => void loadFeed(true)}>
-            <RefreshCw size={12} className={loading ? "spin-slow" : undefined} />
+            <RefreshCw size={12} className={loading ? "spin-fast" : undefined} />
             {t("discover.refresh")}
           </button>
           <span className="ml-auto flex items-center gap-1 text-[10.5px] text-[var(--faint)]">
@@ -41,8 +42,22 @@ export function Discover() {
 
         {loading && feed.length === 0 ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
-            <Loader2 size={24} className="spin-slow" style={{ color: "var(--accent)" }} />
+            <Loader2 size={24} className="spin-fast" style={{ color: "var(--accent)" }} />
             <p className="text-[12px] text-[var(--faint)]">{t("discover.loadingFeed")}</p>
+          </div>
+        ) : feed.length === 0 && feedError ? (
+          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center">
+            <Compass size={30} strokeWidth={1.4} style={{ color: "var(--danger)" }} />
+            <div>
+              <h3 className="text-[14px] font-semibold">{t("discover.loadFailed")}</h3>
+              <p className="mt-1 max-w-md text-[11.5px] leading-relaxed text-[var(--faint)]">
+                {feedError}
+              </p>
+            </div>
+            <button className="btn !py-1.5 text-[11.5px]" onClick={() => void loadFeed(true)}>
+              <RefreshCw size={12} />
+              {t("common.retry")}
+            </button>
           </div>
         ) : feed.length === 0 ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center">
@@ -53,6 +68,17 @@ export function Discover() {
             </div>
           </div>
         ) : (
+          <div className="space-y-2.5">
+            {feedError ? (
+              <div className="flex items-center gap-2 rounded-[10px] border border-[var(--warn)]/35 bg-[var(--warn)]/8 px-3 py-2 text-[11.5px]">
+                <span className="min-w-0 flex-1 truncate text-[var(--muted)]">
+                  {t("discover.loadFailed")}: {feedError}
+                </span>
+                <button className="btn !py-1 text-[10.5px]" onClick={() => void loadFeed(true)}>
+                  {t("common.retry")}
+                </button>
+              </div>
+            ) : null}
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             {feed.map((card, index) => (
               <motion.div
@@ -101,7 +127,7 @@ export function Discover() {
                     onClick={() => void add(card)}
                   >
                     {busyUrl === card.url ? (
-                      <Loader2 size={10} className="spin-slow" />
+                      <Loader2 size={10} className="spin-fast" />
                     ) : (
                       <Plus size={10} />
                     )}
@@ -110,6 +136,7 @@ export function Discover() {
                 </div>
               </motion.div>
             ))}
+          </div>
           </div>
         )}
       </div>

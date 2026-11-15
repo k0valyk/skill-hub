@@ -17,6 +17,7 @@ import {
 import type { ProjectInfo, PublishPlan } from "@/lib/types";
 import { cn, formatBytes, relativeDate } from "@/lib/utils";
 import { useApp, useT } from "@/store";
+import { useEscape, useFocusTrap } from "./common";
 
 const STATUS_TONE: Record<string, { color: string; key: string }> = {
   clean: { color: "var(--ok)", key: "projects.statusClean" },
@@ -50,12 +51,12 @@ export function Projects() {
       <div className="mx-auto max-w-[900px] space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn !py-1.5 text-[11.5px]" onClick={() => void loadProjects()}>
-            <RefreshCw size={12} className={loading ? "spin-slow" : undefined} />
+            <RefreshCw size={12} className={loading ? "spin-fast" : undefined} />
             {t("common.refresh")}
           </button>
           <button className="btn !py-1.5 text-[11.5px]" onClick={() => setCreating((value) => !value)}>
             <Plus size={12} />
-            {t("profiles.create")}
+            {t("projects.create")}
           </button>
           <button
             className="btn !py-1.5 text-[11.5px]"
@@ -230,9 +231,9 @@ export function Projects() {
 
 function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onClose: () => void }) {
   const t = useT();
+  const lang = useApp((state) => state.settings?.language ?? "uk");
   const loadPlan = useApp((state) => state.loadPlan);
   const publishProject = useApp((state) => state.publishProject);
-  const pushToast = useApp((state) => state.pushToast);
   const secretsSet = useApp((state) => state.secrets.githubToken);
 
   const [plan, setPlan] = useState<PublishPlan | null>(null);
@@ -273,6 +274,9 @@ function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onCl
     (isPrivate || confirmPublic) &&
     (plan.secrets.length === 0 || allowSecrets);
 
+  useEscape(Boolean(project), onClose);
+  const trapRef = useFocusTrap<HTMLDivElement>(Boolean(project));
+
   return (
     <AnimatePresence>
       {project ? (
@@ -284,6 +288,10 @@ function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onCl
         >
           <div className="fixed inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
           <motion.div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("projects.publishTitle")}
             initial={{ opacity: 0, y: 20, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12 }}
@@ -313,7 +321,7 @@ function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onCl
 
               {planning ? (
                 <div className="flex min-h-[160px] flex-col items-center justify-center gap-2">
-                  <Loader2 size={20} className="spin-slow" style={{ color: "var(--accent)" }} />
+                  <Loader2 size={20} className="spin-fast" style={{ color: "var(--accent)" }} />
                   <span className="text-[11.5px] text-[var(--faint)]">{t("projects.generating")}</span>
                 </div>
               ) : plan ? (
@@ -358,7 +366,7 @@ function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onCl
                         className={cn(
                           "flex-1 rounded-[8px] px-2 py-1.5 text-[11.5px] font-medium transition-colors",
                           isPrivate === option.value
-                            ? "bg-white/[0.08] text-[var(--text)]"
+                            ? "bg-[var(--active)] text-[var(--text)]"
                             : "text-[var(--faint)] hover:text-[var(--text)]",
                         )}
                       >
@@ -391,7 +399,7 @@ function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onCl
                     </div>
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-[var(--faint)]">{t("projects.size")}</span>
-                      <span className="tabular-nums">{formatBytes(plan.totalSize)}</span>
+                      <span className="tabular-nums">{formatBytes(plan.totalSize, lang)}</span>
                     </div>
                     {plan.gitignoreCreated ? (
                       <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--ok)]">
@@ -467,12 +475,11 @@ function PublishDialog({ project, onClose }: { project: ProjectInfo | null; onCl
                     });
                     setPublishing(false);
                     if (result) {
-                      pushToast(t("toast.copied"), "info");
                       onClose();
                     }
                   }}
                 >
-                  {publishing ? <Loader2 size={12} className="spin-slow" /> : <Upload size={12} />}
+                  {publishing ? <Loader2 size={12} className="spin-fast" /> : <Upload size={12} />}
                   {publishing ? t("projects.publishing") : t("projects.publishNow")}
                 </button>
               </div>

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn, itemSummary } from "@/lib/utils";
 import { useApp, useT } from "@/store";
-import { KindIcon } from "./common";
+import { KindIcon, useFocusTrap } from "./common";
 
 interface Command {
   id: string;
@@ -235,6 +235,8 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!open) return;
+    const previousFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -247,9 +249,11 @@ export function CommandPalette() {
     return () => {
       window.removeEventListener("keydown", handler);
       document.body.style.overflow = previous;
-      (document.activeElement as HTMLElement | null)?.blur();
+      previousFocus?.focus?.();
     };
   }, [open, setPalette]);
+
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
 
   const run = (command?: Command) => {
     if (!command) return;
@@ -269,6 +273,10 @@ export function CommandPalette() {
         >
           <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={() => setPalette(false)} />
           <motion.div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("top.palette")}
             initial={{ opacity: 0, y: -12, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.99 }}
@@ -323,7 +331,7 @@ export function CommandPalette() {
                         onClick={() => run(command)}
                         className={cn(
                           "flex w-full items-center gap-2.5 rounded-[9px] px-3 py-2 text-left transition-colors",
-                          position === index ? "bg-white/[0.07] text-[var(--text)]" : "text-[var(--muted)]",
+                          position === index ? "bg-[var(--active)] text-[var(--text)]" : "text-[var(--muted)]",
                         )}
                       >
                         <span

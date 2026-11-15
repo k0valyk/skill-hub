@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import {
   Bot,
   Boxes,
@@ -99,7 +100,7 @@ export function BudgetBar({
   return (
     <div className="w-full">
       <div
-        className={cn("w-full overflow-hidden rounded-full bg-white/6", compact ? "h-1" : "h-1.5")}
+        className={cn("w-full overflow-hidden rounded-full bg-[var(--track)]", compact ? "h-1" : "h-1.5")}
       >
         <div
           className="h-full rounded-full transition-[width] duration-700 ease-out"
@@ -137,7 +138,7 @@ export function Toggle({
       }}
       className={cn(
         "relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full border transition-colors duration-200",
-        checked ? "border-transparent" : "border-[var(--line-strong)] bg-white/5",
+        checked ? "border-transparent" : "border-[var(--line-strong)] bg-[var(--track)]",
         disabled && "opacity-50",
       )}
       style={
@@ -210,4 +211,58 @@ export function EmptyState({
       {action}
     </div>
   );
+}
+
+/** Закриває модалку/drawer по Escape, якщо вона відкрита. */
+export function useEscape(active: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, onClose]);
+}
+
+/** Тримає Tab у межах діалогу й повертає фокус на тригер після закриття. */
+export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(active: boolean) {
+  const ref = useRef<T | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const node = ref.current;
+    if (!node) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selector =
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = Array.from(node.querySelectorAll<HTMLElement>(selector)).filter(
+        (element) => element.offsetParent !== null || element === document.activeElement,
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!node.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    node.addEventListener("keydown", onKey);
+    return () => {
+      node.removeEventListener("keydown", onKey);
+      previous?.focus?.();
+    };
+  }, [active]);
+  return ref;
 }
