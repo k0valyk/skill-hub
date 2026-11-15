@@ -166,7 +166,10 @@ pub fn run() {
             commands::agent_run_task,
             commands::agent_cancel_task,
             commands::agents_runtime,
+            commands::agent_qa_report,
             commands::opencode_models,
+            commands::voice_languages,
+            commands::voice_listen,
         ])
         .run(tauri::generate_context!())
         .expect("Skill Hub не зміг запуститися");

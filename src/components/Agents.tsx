@@ -8,12 +8,14 @@ import {
   Coins,
   Download,
   FileText,
+  FlaskConical,
   FolderGit2,
   FolderOpen,
   FolderPlus,
   Image as ImageIcon,
   LayoutGrid,
   Loader2,
+  Mic,
   Network,
   Play,
   Plus,
@@ -25,12 +27,25 @@ import {
   Square,
   Trash2,
   Upload,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import { isTauri } from "@/lib/api";
 import type { Agent, AgentTask } from "@/lib/types";
+import {
+  compressVoiceText,
+  estimateVoiceTokens,
+  getAgentVoice,
+  getVoiceAutoSend,
+  setAgentVoice,
+  setVoiceAutoSend,
+  speechSupported,
+  stopSpeaking,
+} from "@/lib/voice";
 import { cn, formatNumber, relativeDate } from "@/lib/utils";
 import { useApp, useT } from "@/store";
+import { AgentQaCycle } from "./AgentQaCycle";
 import { KindIcon } from "./common";
 
 const STATUS_FILTERS = ["all", "idle", "working", "waiting", "error", "disabled"] as const;
@@ -161,12 +176,23 @@ export function Agents() {
   const [layout, setLayout] = useState<"grid" | "graph">("grid");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [qaOpen, setQaOpen] = useState(false);
+  const refreshRef = useRef(false);
 
   useEffect(() => {
-    void loadAgents();
+    const refresh = async () => {
+      if (refreshRef.current) return;
+      refreshRef.current = true;
+      try {
+        await loadAgents();
+      } finally {
+        refreshRef.current = false;
+      }
+    };
+    void refresh();
     void loadAgentTemplates();
     void loadAgentRuntime();
-    const timer = window.setInterval(() => void loadAgents(), 6000);
+    const timer = window.setInterval(() => void refresh(), 6000);
     return () => window.clearInterval(timer);
   }, [loadAgents, loadAgentTemplates, loadAgentRuntime]);
 
@@ -303,6 +329,14 @@ export function Agents() {
           >
             <Upload size={12} />
           </button>
+          <button
+            className="btn !h-[32px] !px-2.5 !py-0 text-[11px]"
+            onClick={() => setQaOpen(true)}
+            title={t("qa.title")}
+          >
+            <FlaskConical size={12} />
+            <span className="hidden xl:inline">{t("qa.cycleButton")}</span>
+          </button>
           <button className="btn btn-primary !h-[32px] !py-0 text-[11.5px]" onClick={() => setCreateOpen(true)}>
             <Plus size={13} />
             {t("agents.create")}
@@ -364,6 +398,7 @@ export function Agents() {
           setSelectedId(agent.id);
         }}
       />
+      <AgentQaCycle open={qaOpen} onClose={() => setQaOpen(false)} />
     </div>
   );
 }
@@ -635,6 +670,8 @@ function AgentDrawer({
   const loadAgentTasks = useApp((state) => state.loadAgentTasks);
   const openPath = useApp((state) => state.openPath);
   const defaultModel = useApp((state) => state.settings?.agentModel ?? "");
+  const settings = useApp((state) => state.settings);
+  const listenVoice = useApp((state) => state.listenVoice);
 
   const [description, setDescription] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -646,7 +683,22 @@ function AgentDrawer({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [autoSend, setAutoSend] = useState(getVoiceAutoSend());
+  const [voiceOn, setVoiceOn] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!agent) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [agent?.id, onClose]);
 
   useEffect(() => {
     if (!agent) return;
@@ -656,6 +708,7 @@ function AgentDrawer({
     setConfirmDelete(false);
     setProject(agent.projects[0] ?? agent.projectPath ?? "");
     setAuto(agent.autoApprove);
+    setVoiceOn(getAgentVoice(agent.id));
     setPrompt("");
     void loadAgentTasks(agent.id).then(setTasks);
   }, [agent?.id, loadAgentTasks]);
@@ -668,15 +721,28 @@ function AgentDrawer({
   const availableSkills = items.filter((item) => !agent?.skills.includes(item.id));
   const active = agent ? agent.status === "working" || agent.status === "waiting" : false;
 
-  const send = async () => {
-    if (!agent || !prompt.trim()) return;
+  const send = async (value = prompt) => {
+    const text = value.trim();
+    if (!agent || !text) return;
     setBusy(true);
-    const task = await runAgentTask(agent.id, prompt.trim(), project || undefined, auto);
+    const task = await runAgentTask(agent.id, text, project || undefined, auto);
     setBusy(false);
     if (task) {
       setPrompt("");
       setTimeout(() => void loadAgentTasks(agent.id).then(setTasks), 800);
     }
+  };
+
+  const listen = async () => {
+    if (!agent || listening || active) return;
+    setListening(true);
+    const lang = settings?.voiceLanguage ?? "uk-UA";
+    const heard = await listenVoice(lang);
+    setListening(false);
+    if (!heard) return;
+    const clean = settings?.voiceEconomical ?? true ? compressVoiceText(heard) : heard;
+    setPrompt(clean);
+    if (autoSend) void send(clean);
   };
 
   return (
@@ -726,6 +792,24 @@ function AgentDrawer({
                 <button className="btn btn-ghost !p-1.5" onClick={() => void exportAgent(agent.id)} title={t("agents.export")}>
                   <Download size={15} />
                 </button>
+                <button
+                  className="btn btn-ghost !p-1.5"
+                  style={{ color: voiceOn ? "var(--accent)" : undefined }}
+                  onClick={() => {
+                    const next = !voiceOn;
+                    setVoiceOn(next);
+                    setAgentVoice(agent.id, next);
+                    if (!next) stopSpeaking();
+                  }}
+                  title={voiceOn ? t("agents.voiceOn") : t("agents.voiceOff")}
+                >
+                  {voiceOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                </button>
+                {voiceOn ? (
+                  <button className="btn btn-ghost !p-1.5" onClick={stopSpeaking} title={t("agents.voiceStop")}>
+                    <Square size={12} />
+                  </button>
+                ) : null}
                 <button className="btn btn-ghost !p-1.5" onClick={onClose}>
                   <X size={16} />
                 </button>
@@ -939,6 +1023,17 @@ function AgentDrawer({
                           <span>· {formatDuration(task.durationMs)}</span>
                           <span>· {formatNumber(task.tokensIn + task.tokensOut)} {t("common.tokens")}</span>
                           {task.projectPath ? <span className="mono truncate">· {task.projectPath}</span> : null}
+                          {task.status === "error" ? (
+                            <button
+                              className="text-[var(--accent)]"
+                              onClick={() => {
+                                setPrompt(task.prompt);
+                                promptRef.current?.focus();
+                              }}
+                            >
+                              {t("agents.retry")}
+                            </button>
+                          ) : null}
                           {task.output ? (
                             <button
                               className="ml-auto text-[var(--accent)]"
@@ -1039,6 +1134,29 @@ function AgentDrawer({
                   {t("agents.autoApprove")}
                 </label>
                 <button
+                  className={cn(
+                    "btn !py-1.5 text-[11px]",
+                    listening && "border-[var(--accent)] text-[var(--accent)]",
+                  )}
+                  disabled={listening || active}
+                  onClick={() => void listen()}
+                  title={t("agents.listenHint")}
+                >
+                  {listening ? <Loader2 size={11} className="spin-slow" /> : <Mic size={11} />}
+                  {listening ? t("agents.listening") : t("agents.listen")}
+                </button>
+                <label className="flex items-center gap-1.5 text-[10px] text-[var(--faint)]" title={t("agents.autoSendHint")}>
+                  <input
+                    type="checkbox"
+                    checked={autoSend}
+                    onChange={(event) => {
+                      setAutoSend(event.target.checked);
+                      setVoiceAutoSend(event.target.checked);
+                    }}
+                  />
+                  {t("agents.autoSend")}
+                </label>
+                <button
                   className="btn btn-primary ml-auto !py-1.5 text-[11px]"
                   disabled={!prompt.trim() || busy || active}
                   onClick={() => void send()}
@@ -1047,6 +1165,13 @@ function AgentDrawer({
                   {t("agents.send")}
                 </button>
               </div>
+              {prompt.trim() ? (
+                <div className="mt-1 text-right text-[9.5px] text-[var(--faint)]">
+                  ≈ {estimateVoiceTokens(prompt)} {t("common.tokens")}
+                  {settings?.voiceEconomical ? ` · ${t("agents.voiceEconomicalShort")}` : ""}
+                  {!speechSupported() ? ` · ${t("agents.voiceUnsupported")}` : ""}
+                </div>
+              ) : null}
             </div>
           </motion.aside>
         </motion.div>

@@ -132,6 +132,8 @@ export interface Settings {
   language: "uk" | "en";
   deepseekModel: string;
   agentModel: string;
+  voiceLanguage: string;
+  voiceEconomical: boolean;
   contextBudget: number;
   autoCheckUpdates: boolean;
   lastUpdateCheck?: string | null;
@@ -384,4 +386,15 @@ export interface AgentPatch {
   icon?: string | null;
   tags?: string[] | null;
   autoApprove?: boolean | null;
+}
+
+export interface QaReportSummary {
+  path: string;
+  exists: boolean;
+  total: number;
+  openCritical: number;
+  openHigh: number;
+  openMedium: number;
+  openLow: number;
+  generatedAt?: string | null;
 }

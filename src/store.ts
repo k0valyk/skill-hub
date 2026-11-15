@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { call, errorText, isTauri } from "./lib/api";
+import { getAgentVoice, speak } from "./lib/voice";
 import { translate, type Lang, type TranslationKey } from "./lib/i18n";
 import type {
   Agent,
@@ -45,6 +46,20 @@ export interface InstallState {
   stage: string;
   pct: number;
 }
+
+export interface AgentTaskResult {
+  agentId: string;
+  taskId: string;
+  status: string;
+  output: string;
+  exitCode?: number | null;
+  durationMs: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+const taskWaiters = new Map<string, (result: AgentTaskResult | null) => void>();
 
 interface AppStore {
   ready: boolean;
@@ -92,6 +107,7 @@ interface AppStore {
   agentActivity: Record<string, { taskId: string; activity: string; waiting: boolean }>;
   agentRuntime: string | null;
   agentModels: string[];
+  voiceLanguages: string[];
 
   toasts: Toast[];
 
@@ -143,6 +159,8 @@ interface AppStore {
   loadAgentTemplates: () => Promise<void>;
   loadAgentRuntime: () => Promise<void>;
   loadAgentModels: () => Promise<void>;
+  loadVoiceLanguages: () => Promise<void>;
+  listenVoice: (lang: string) => Promise<string | null>;
   createAgent: (input: AgentCreateInput) => Promise<Agent | null>;
   updateAgent: (id: string, patch: AgentPatch) => Promise<boolean>;
   toggleAgent: (id: string, enabled: boolean) => Promise<boolean>;
@@ -160,6 +178,12 @@ interface AppStore {
     project?: string,
     autoApprove?: boolean,
   ) => Promise<AgentTask | null>;
+  runAgentTaskAndWait: (
+    id: string,
+    prompt: string,
+    project?: string,
+    autoApprove?: boolean,
+  ) => Promise<AgentTaskResult | null>;
   cancelAgentTask: (id: string) => Promise<void>;
   loadAgentTasks: (id: string) => Promise<AgentTask[]>;
   setAgentActivity: (payload: {
@@ -177,6 +201,7 @@ interface AppStore {
     tokensIn: number;
     tokensOut: number;
     costUsd: number;
+    output?: string;
   }) => void;
   chooseFolder: () => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
@@ -257,6 +282,7 @@ export const useApp = create<AppStore>((set, get) => {
     agentActivity: {},
     agentRuntime: null,
     agentModels: [],
+    voiceLanguages: [],
 
     toasts: [],
 
@@ -778,6 +804,24 @@ export const useApp = create<AppStore>((set, get) => {
       }
     },
 
+    loadVoiceLanguages: async () => {
+      try {
+        const voiceLanguages = await call<string[]>("voice_languages");
+        set({ voiceLanguages });
+      } catch {
+        set({ voiceLanguages: [] });
+      }
+    },
+
+    listenVoice: async (lang) => {
+      try {
+        return await call<string>("voice_listen", { lang, timeoutMs: 10000 });
+      } catch (error) {
+        get().pushToast(errorText(error), "error");
+        return null;
+      }
+    },
+
     createAgent: async (input) => {
       try {
         const agent = await call<Agent>("agent_create", { input });
@@ -948,8 +992,18 @@ export const useApp = create<AppStore>((set, get) => {
       }
     },
 
-    cancelAgentTask: async (id) => {
-      try {
+    runAgentTaskAndWait: async (id, prompt, project, autoApprove) => {
+      const task = await get().runAgentTask(id, prompt, project, autoApprove);
+      if (!task) return null;
+      return new Promise<AgentTaskResult | null>((resolve) => {
+        taskWaiters.set(task.id, resolve);
+        window.setTimeout(() => {
+          if (taskWaiters.delete(task.id)) resolve(null);
+        }, 12 * 60 * 1000);
+      });
+    },
+
+    cancelAgentTask: async (id) => {      try {
         await call("agent_cancel_task", { id });
         set((state) => {
           const next = { ...state.agentActivity };
@@ -997,6 +1051,21 @@ export const useApp = create<AppStore>((set, get) => {
       })),
 
     finishAgentTask: (payload) => {
+      const waiter = taskWaiters.get(payload.taskId);
+      if (waiter) {
+        taskWaiters.delete(payload.taskId);
+        waiter({
+          agentId: payload.agentId,
+          taskId: payload.taskId,
+          status: payload.status,
+          output: payload.output ?? "",
+          exitCode: payload.exitCode,
+          durationMs: payload.durationMs,
+          tokensIn: payload.tokensIn,
+          tokensOut: payload.tokensOut,
+          costUsd: payload.costUsd,
+        });
+      }
       const agent = get().agents.find((entry) => entry.id === payload.agentId);
       set((state) => {
         const agentActivity = { ...state.agentActivity };
@@ -1030,6 +1099,14 @@ export const useApp = create<AppStore>((set, get) => {
         get().pushToast(
           translate(lang(), "agents.taskFailed", { name: agent?.name ?? "Agent" }),
           "error",
+        );
+      }
+      if (payload.status === "ok" && agent && getAgentVoice(agent.id)) {
+        const settings = get().settings;
+        void speak(
+          payload.output ?? "",
+          settings?.voiceLanguage ?? "uk-UA",
+          settings?.voiceEconomical ?? true,
         );
       }
       void get().loadAgents();

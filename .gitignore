@@ -8,3 +8,6 @@ src-tauri/gen
 src-tauri/binaries
 *.log
 *.tsbuildinfo
+reports/ui/
+reports/qa-report.json
+reports/fix-report.md

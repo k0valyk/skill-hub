@@ -245,8 +245,58 @@ let mockAgents: Agent[] = [
   },
 ];
 
-const mockAgentTasks: AgentTask[] = [
+mockAgents.push(
   {
+    ...mockAgents[0],
+    id: "g:qa-tester",
+    key: "qa-tester",
+    path: "C:\\Users\\demo\\.config\\opencode\\agents\\qa-tester.md",
+    fileName: "qa-tester.md",
+    name: "Тестувальник",
+    techName: "qa-tester",
+    description: "Прискіпливий QA-тестувальник: проходить усі вкладки, кнопки, теми й крайні випадки, пише звіт.",
+    icon: "🧪|#ffb86b",
+    mode: "primary",
+    tags: ["qa", "testing"],
+    skills: [],
+    projects: ["C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api"],
+    status: "idle",
+    activity: null,
+    lastRunAt: null,
+    lastStatus: null,
+    tokensIn: 0,
+    tokensOut: 0,
+    costUsd: 0,
+    bodyTokens: 640,
+    autoApprove: true,
+  },
+  {
+    ...mockAgents[0],
+    id: "g:fixer",
+    key: "fixer",
+    path: "C:\\Users\\demo\\.config\\opencode\\agents\\fixer.md",
+    fileName: "fixer.md",
+    name: "Виправляч",
+    techName: "fixer",
+    description: "Читає звіт QA, виправляє причини багів за пріоритетом і оновлює звіт для повторної перевірки.",
+    icon: "🛠️|#43e97b",
+    mode: "primary",
+    tags: ["fixer", "dev"],
+    skills: [],
+    projects: ["C:\\Users\\demo\\Documents\\SkillHub\\projects\\saas-api"],
+    status: "idle",
+    activity: null,
+    lastRunAt: null,
+    lastStatus: null,
+    tokensIn: 0,
+    tokensOut: 0,
+    costUsd: 0,
+    bodyTokens: 580,
+    autoApprove: true,
+  },
+);
+
+const mockAgentTasks: AgentTask[] = [  {
     id: "task-1",
     agentId: "p:8f2a1c3d:reviewer",
     agentName: "Code Reviewer",
@@ -287,6 +337,8 @@ let settings: Settings = {
   language: "uk",
   deepseekModel: "deepseek-chat",
   agentModel: "deepseek/deepseek-flash",
+  voiceLanguage: "uk-UA",
+  voiceEconomical: true,
   contextBudget: 6000,
   autoCheckUpdates: true,
   lastUpdateCheck: iso(2),
@@ -709,6 +761,10 @@ export async function mockCall<T>(command: string, args?: Record<string, unknown
         "deepseek/deepseek-v4-pro",
         "opencode/glm-5.3-flash-free",
       ] as T;
+    case "voice_languages":
+      return ["en-US"] as T;
+    case "voice_listen":
+      return "Привіт, це тест голосового вводу" as T;
     case "agent_create": {
       const input = (args?.input ?? {}) as Record<string, unknown>;
       const name = String(input.name ?? "agent");

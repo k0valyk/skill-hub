@@ -51,6 +51,8 @@ export function Settings() {
   const pushToast = useApp((state) => state.pushToast);
   const agentModels = useApp((state) => state.agentModels);
   const loadAgentModels = useApp((state) => state.loadAgentModels);
+  const voiceLanguages = useApp((state) => state.voiceLanguages);
+  const loadVoiceLanguages = useApp((state) => state.loadVoiceLanguages);
 
   const [draft, setDraft] = useState<SettingsType | null>(settings);
   const [deepseekKey, setDeepseekKey] = useState("");
@@ -63,7 +65,8 @@ export function Settings() {
 
   useEffect(() => {
     void loadAgentModels();
-  }, [loadAgentModels]);
+    void loadVoiceLanguages();
+  }, [loadAgentModels, loadVoiceLanguages]);
 
   useEffect(
     () => () => {
@@ -266,6 +269,36 @@ export function Settings() {
               ) : null}
             </select>
           </Field>
+          <Field label={t("settings.voiceLanguage")} hint={t("settings.voiceLanguageHint")}>
+            <select
+              className="input h-[32px] !py-0 text-[11.5px]"
+              value={draft.voiceLanguage}
+              onChange={(event) => void persist({ voiceLanguage: event.target.value })}
+            >
+              {(voiceLanguages.length > 0 ? voiceLanguages : ["uk-UA", "ru-RU", "en-US"]).map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+              {draft.voiceLanguage && !voiceLanguages.includes(draft.voiceLanguage) ? (
+                <option value={draft.voiceLanguage}>{draft.voiceLanguage}</option>
+              ) : null}
+            </select>
+          </Field>
+          <Row
+            label={t("settings.voiceEconomical")}
+            hint={t("settings.voiceEconomicalHint")}
+            control={
+              <Toggle
+                checked={draft.voiceEconomical}
+                onChange={(next) => void persist({ voiceEconomical: next })}
+                label={t("settings.voiceEconomical")}
+              />
+            }
+          />
+          <div className="text-[10px] text-[var(--faint)]">
+            {t("settings.voiceInstallHint")} {voiceLanguages.join(", ") || "—"}
+          </div>
         </Section>
 
         <Section

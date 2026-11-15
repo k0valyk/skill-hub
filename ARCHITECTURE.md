@@ -158,6 +158,23 @@ Discovery:
 
 ---
 
+## 5.2 Голос і QA-цикл
+
+### Голос
+
+- `voice_languages` / `voice_listen` (Rust) запускають PowerShell-скрипт `scripts/voice-listen.ps1` з `System.Speech.Recognition` у `spawn_blocking`. Скрипт вбудований через `include_str!`, пише в temp з UTF-8 BOM і повертає розпізнаний текст.
+- Мови залежать від мовних пакетів Windows; `voice_languages` повертає встановлені. Аудіо не йде в модель і не витрачає токени.
+- Озвучення — Web Speech API у WebView2 (`speechSynthesis`), вибір голосу за мовою, `prepareSpeech` прибирає код/таблиці/списки, економний режим лишає 2–3 речення. Перемикач зберігається per-agent у `localStorage`.
+- UI: кнопка мікрофона в composer, «Авто» для автовідправки, індикатор «Слухаю…», оцінка токенів під полем, динамік і стоп у шапці агента.
+
+### QA-цикл
+
+- Глобальні агенти `qa-tester` і `fixer` (Markdown у `~/.config/opencode/agents`) працюють із папкою `reports/` проєкту. `qa-report.json` має фіксовану схему; `fixer` змінює `status/fixSummary/files`.
+- Кнопка **QA цикл** (`AgentQaCycle`) запускає `qa-tester` → читає звіт (`agent_qa_report`) → запускає `fixer` → повторює до 5 кругів, поки є critical/high. Події завдань уже дають живий статус, логи, токени й вартість; кнопка зупинки скасовує поточного агента.
+- `scripts/qa-ui.mjs` (Playwright + Edge) перевіряє браузерний mock-режим: вкладки, палітру (Ctrl+K, Escape, клік поза), агенти, голосовий ввід, QA-модалку, теми. Пише `reports/ui/ui-report.json` і скріншоти.
+
+---
+
 ## 6. Дані на диску
 
 ### `skillhub.json` (поруч з елементом)

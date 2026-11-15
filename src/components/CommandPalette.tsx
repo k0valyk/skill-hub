@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
@@ -46,6 +46,7 @@ export function CommandPalette() {
   const lang = settings?.language ?? "uk";
 
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [index, setIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -200,14 +201,14 @@ export function CommandPalette() {
   ]);
 
   const filtered = useMemo(() => {
-    const value = query.trim().toLowerCase();
+    const value = deferredQuery.trim().toLowerCase();
     if (!value) return commands.slice(0, 40);
     return commands
       .filter((command) =>
         `${command.label} ${command.hint ?? ""} ${command.group}`.toLowerCase().includes(value),
       )
       .slice(0, 40);
-  }, [commands, query]);
+  }, [commands, deferredQuery]);
 
   useEffect(() => {
     setIndex(0);
@@ -220,7 +221,10 @@ export function CommandPalette() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        (event.code === "KeyK" || event.key.toLowerCase() === "k")
+      ) {
         event.preventDefault();
         setPalette(!useApp.getState().paletteOpen);
       }
@@ -228,6 +232,24 @@ export function CommandPalette() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [setPalette]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPalette(false);
+      }
+    };
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = previous;
+      (document.activeElement as HTMLElement | null)?.blur();
+    };
+  }, [open, setPalette]);
 
   const run = (command?: Command) => {
     if (!command) return;

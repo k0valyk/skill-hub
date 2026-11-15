@@ -712,19 +712,30 @@ pub async fn save_settings(
     state: tauri::State<'_, AppState>,
 ) -> Result<Settings, String> {
     let old_root = state.root();
-    let new_root = next.root_path();
-    crate::settings::ensure_dirs(&new_root).map_err(|e| humanize(&e))?;
     let mut sanitized = next;
     sanitized.context_budget = sanitized.context_budget.clamp(500, 200_000);
     if sanitized.workspace_missing() {
         return Err("Вкажи коректну папку бібліотеки.".into());
     }
+    let new_root = sanitized.root_path();
+    let root_changed = old_root != new_root;
+    let io_root = new_root.clone();
+    let prepared = tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<Option<Db>> {
+        crate::settings::ensure_dirs(&io_root)?;
+        if root_changed {
+            let db = Db::open(&db_file(&io_root))?;
+            let _ = crate::scanner::scan(&io_root, &db);
+            Ok(Some(db))
+        } else {
+            Ok(None)
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| humanize(&error))?;
     crate::settings::save(&sanitized).map_err(|e| humanize(&e))?;
-    if old_root != new_root {
-        let new_db = Db::open(&db_file(&new_root)).map_err(|e| humanize(&e))?;
-        *state.db.lock().unwrap() = new_db;
-        let handle = state.db.lock().unwrap();
-        let _ = crate::scanner::scan(&new_root, &handle);
+    if let Some(db) = prepared {
+        *state.db.lock().unwrap() = db;
     }
     *state.settings.lock().unwrap() = sanitized.clone();
     Ok(sanitized)
@@ -1271,11 +1282,13 @@ pub async fn agents_runtime() -> Result<Option<String>, String> {
 pub async fn opencode_models() -> Result<Vec<String>, String> {
     let cli = crate::agents::opencode_cli()
         .ok_or_else(|| "OpenCode CLI не знайдено.".to_string())?;
-    let output = opencode_command(&cli)
-        .arg("models")
-        .output()
-        .await
-        .map_err(|error| error.to_string())?;
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        opencode_command(&cli).arg("models").output(),
+    )
+    .await
+    .map_err(|_| "OpenCode не відповів на `models` за 8 секунд.".to_string())?
+    .map_err(|error| error.to_string())?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
@@ -1328,7 +1341,8 @@ fn finalize_agent_task(
             "durationMs": duration,
             "tokensIn": tokens_in,
             "tokensOut": tokens_out,
-            "costUsd": cost_usd
+            "costUsd": cost_usd,
+            "output": output.chars().take(8000).collect::<String>()
         }),
     );
 }
@@ -1523,9 +1537,17 @@ pub async fn agent_run_task(
         let mut tokens_in = 0i64;
         let mut tokens_out = 0i64;
         let mut cost = 0.0f64;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15 * 60);
+        let mut timed_out = false;
 
         while out_open || err_open {
             tokio::select! {
+                _ = tokio::time::sleep_until(deadline) => {
+                    timed_out = true;
+                    activity = "Таймаут 15 хвилин".into();
+                    let _ = child.start_kill();
+                    break;
+                }
                 line = out_lines.next_line(), if out_open => {
                     match line {
                         Ok(Some(line)) => {
@@ -1601,9 +1623,15 @@ pub async fn agent_run_task(
             }
         }
 
+        if timed_out {
+            if output.is_empty() {
+                output = "⚠️ Перевищено ліміт 15 хвилин. Завдання зупинено.".into();
+            }
+            let _ = child.start_kill();
+        }
         let status = child.wait().await;
         let exit_code = status.as_ref().ok().and_then(|status| status.code()).map(i64::from);
-        let status_text = if exit_code == Some(0) { "ok" } else { "error" };
+        let status_text = if !timed_out && exit_code == Some(0) { "ok" } else { "error" };
         finalize_agent_task(
             &db,
             &running,
@@ -1659,6 +1687,142 @@ pub async fn agent_cancel_task(
         );
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn voice_languages() -> Result<Vec<String>, String> {
+    let languages = tauri::async_runtime::spawn_blocking(|| run_voice_script("en-US", 1000, true))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error)?;
+    Ok(languages
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+#[tauri::command]
+pub async fn voice_listen(lang: String, timeout_ms: Option<u64>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_voice_script(&lang, timeout_ms.unwrap_or(10_000).clamp(2_000, 15_000), false)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn run_voice_script(culture: &str, timeout_ms: u64, list: bool) -> Result<String, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = (culture, timeout_ms, list);
+        return Err("Голосове розпізнавання доступне лише на Windows.".into());
+    }
+    #[cfg(windows)]
+    {
+        const SCRIPT: &str = include_str!("../scripts/voice-listen.ps1");
+        let path = std::env::temp_dir().join("skillhub-voice-listen.ps1");
+        std::fs::write(&path, format!("\u{feff}{SCRIPT}"))
+            .map_err(|error| error.to_string())?;
+        let mut command = std::process::Command::new("powershell");
+        command
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+            .arg(&path)
+            .arg("-Culture")
+            .arg(culture)
+            .arg("-TimeoutMs")
+            .arg(timeout_ms.to_string());
+        if list {
+            command.arg("-List");
+        }
+        let output = command.output().map_err(|error| error.to_string())?;
+        if !output.status.success() {
+            let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if message.is_empty() {
+                "Не вдалося розпізнати мовлення.".into()
+            } else {
+                message
+            });
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QaReportSummary {
+    pub path: String,
+    pub exists: bool,
+    pub total: i64,
+    pub open_critical: i64,
+    pub open_high: i64,
+    pub open_medium: i64,
+    pub open_low: i64,
+    pub generated_at: Option<String>,
+}
+
+#[tauri::command]
+pub async fn agent_qa_report(project: String) -> Result<QaReportSummary, String> {
+    let path = PathBuf::from(project).join("reports").join("qa-report.json");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(_) => {
+            return Ok(QaReportSummary {
+                path: path.to_string_lossy().to_string(),
+                exists: false,
+                total: 0,
+                open_critical: 0,
+                open_high: 0,
+                open_medium: 0,
+                open_low: 0,
+                generated_at: None,
+            })
+        }
+    };
+    let value: serde_json::Value =
+        serde_json::from_str(&text).map_err(|error| format!("Некоректний qa-report.json: {error}"))?;
+    let bugs = value
+        .get("bugs")
+        .and_then(|bugs| bugs.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut summary = QaReportSummary {
+        path: path.to_string_lossy().to_string(),
+        exists: true,
+        total: 0,
+        open_critical: 0,
+        open_high: 0,
+        open_medium: 0,
+        open_low: 0,
+        generated_at: value
+            .get("generatedAt")
+            .and_then(|value| value.as_str())
+            .map(str::to_string),
+    };
+    for bug in bugs {
+        let status = bug
+            .get("status")
+            .and_then(|value| value.as_str())
+            .unwrap_or("open")
+            .to_ascii_lowercase();
+        if matches!(status.as_str(), "fixed" | "resolved" | "closed" | "verified") {
+            continue;
+        }
+        summary.total += 1;
+        match bug
+            .get("severity")
+            .and_then(|value| value.as_str())
+            .unwrap_or("low")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "critical" => summary.open_critical += 1,
+            "high" => summary.open_high += 1,
+            "medium" => summary.open_medium += 1,
+            _ => summary.open_low += 1,
+        }
+    }
+    Ok(summary)
 }
 
 #[tauri::command]
